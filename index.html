@@ -124,6 +124,7 @@
         <button id="restartBtn">Restart?</button>
     </div>
     <script src="https://unpkg.com/short-unique-id@latest/dist/short-unique-id.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
     <script src="https://unpkg.com/peerjs@latest/dist/peerjs.min.js"></script>
     <script>
         const canvas = document.getElementById('tetrisCanvas');
@@ -215,9 +216,9 @@
             {note: 440, dur: 200}, {note: 440, dur: 200}, {note: 494, dur: 200}, {note: 523, dur: 200},
             {note: 494, dur: 200}, {note: 440, dur: 200}, {note: 392, dur: 400},
             {note: 392, dur: 200}, {note: 440, dur: 200}, {note: 392, dur: 400},
-            {note: 659, dur: 200}, {note: 523, dur: 200}, {note: 587, dur: 200}, {note: 659, dur: 200},
+            {note: 659, dur: 200}, {note: 523, dur: 200}, {note: 587", dur: 200}, {note: 659, dur: 200},
             {note: 587, dur: 200}, {note: 523, dur: 200}, {note: 494, dur: 200}, {note: 494, dur: 200},
-            {note: 523, dur: 200}, {note: 587, dur: 200}, {note: 523, dur: 200}, {note: 494, dur: 200},
+            {note: 523, dur: 200}, {note: 587, dur: 200}, {note: 523, dur: 200}, {note: 200, dur: 200},
             {note: 440, dur: 200}, {note: 440, dur: 200}, {note: 494, dur: 200}, {note: 523, dur: 200},
             {note: 494, dur: 200}, {note: 440, dur: 200}, {note: 392, dur: 400}
         ];
@@ -237,10 +238,11 @@
             }, music[themeIndex - 1].dur);
         }
 
-        const resumeAndPlay = () => initAudioContext().then(() => {
+        const resumeAndPlay = () => {
+            await initAudioContext();
             playSilent();
             if (musicOn) playTheme();
-        });
+        };
 
         document.addEventListener('touchstart', resumeAndPlay, {once: true});
         document.addEventListener('click', resumeAndPlay, {once: true});
@@ -272,7 +274,7 @@
                     do {
                         candidateType = Math.floor(Math.random() * PIECES.length);
                     } while (candidateType === lastType);
-                    consecutiveCount = 0;
+                consecutiveCount = 0;
                 } else {
                     if (candidateType === lastType) {
                         consecutiveCount++;
@@ -465,7 +467,7 @@
             if (!isHost) return;
             const fullState = {
                 type: 'fullstate',
-                allBoards: Object.fromEntries(Object.entries(allBoards).map(([k, v]) => [k, v.map(row => row.slice())])),
+                allBoards: Object.fromEntries(Object.entries(allBoards).map([k, v] => [k, v.map(row => row.slice())])),
                 allPieces,
                 allScores,
                 allLevels,
@@ -790,6 +792,17 @@
             return uid.rnd().toUpperCase();
         }
 
+        function generateTurnCredentials() {
+            const secret = 'openrelayprojectsecret';
+            const unixTimestamp = Math.floor(Date.now() / 1000) + 86400; // 24 hours validity
+            const username = unixTimestamp.toString();
+            const hmac = CryptoJS.HmacSHA1(username, secret);
+            const credential = hmac.toString(CryptoJS.enc.Base64);
+            return {username, credential};
+        }
+
+        const {username, credential} = generateTurnCredentials();
+
         const peerConfig = {
             host: '0.peerjs.com',
             port: 443,
@@ -801,11 +814,10 @@
                     { urls: 'stun:stun2.l.google.com:19302' },
                     { urls: 'stun:stun3.l.google.com:19302' },
                     { urls: 'stun:stun4.l.google.com:19302' },
-                    { urls: 'stun:global.stun.twilio.com:3478' },
-                    { urls: 'turn:numb.viagenie.ca', username: 'webrtc@live.com', credential: 'muazkh' },
-                    { urls: 'turn:numb.viagenie.ca:3478?transport=udp', username: 'webrtc@live.com', credential: 'muazkh' },
-                    { urls: 'turn:numb.viagenie.ca:3478?transport=tcp', username: 'webrtc@live.com', credential: 'muazkh' },
-                    { urls: 'turn:numb.viagenie.ca:5349?transport=tcp', username: 'webrtc@live.com', credential: 'muazkh' }
+                    { urls: 'turn:openrelay.metered.ca:80', username: username, credential: credential },
+                    { urls: 'turn:openrelay.metered.ca:443', username: username, credential: credential },
+                    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: username, credential: credential },
+                    { urls: 'turn:staticauth.openrelay.metered.ca:443', username: username, credential: credential }
                 ]
             }
         };
@@ -858,9 +870,6 @@
                     if (joinId) {
                         conn = peer.connect(joinId);
                         setupConnection(conn);
-                        conn.on('open', () => {
-                            console.log('Connection open for joiner');
-                        });
                     }
                 });
                 peer.on('error', err => {
