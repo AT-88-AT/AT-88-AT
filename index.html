@@ -8,7 +8,7 @@
         body { margin: 0; background: black; color: white; font-family: monospace; display: flex; flex-direction: row; align-items: flex-start; justify-content: center; min-height: 100vh; padding-top: 20px; }
         #sidebar { width: 200px; padding: 20px; text-align: left; }
         #main { display: flex; flex-direction: column; align-items: center; }
-        #gameArea { display: flex; align-items: flex-start; margin: 20px; position: relative; flex-wrap: wrap; justify-content: center; }
+        #gameArea { display: flex; align-items: flex-start; margin: 20px; position: relative; }
         canvas { border: 1px solid white; background: #111; touch-action: none; }
         #boards { display: flex; flex-direction: row; align-items: flex-start; }
         #rightSide { display: flex; flex-direction: column; align-items: center; }
@@ -29,7 +29,6 @@
         #opponentArea { display: flex; flex-direction: column; align-items: center; margin-left: 20px; }
         #opponentScore { margin: 10px; font-size: 20px; }
         #opponentLevel { margin: 10px; font-size: 20px; }
-        .playerArea { display: flex; flex-direction: column; align-items: center; margin: 10px; }
         @media (max-width: 600px) {
             body { flex-direction: column; padding: 10px; overflow-y: scroll; }
             #sidebar { width: auto; text-align: center; }
@@ -63,7 +62,7 @@
     <div id="sidebar">
         <h2>Tetris VS Simulator</h2>
         <h3>Gameplay Instructions</h3>
-        <p>Stack tetrominoes to fill rows and clear lines. In VS mode, clearing multiple lines sends garbage to opponents. Reach higher levels for faster drops and exotic animations.</p>
+        <p>Stack tetrominoes to fill rows and clear lines. In VS mode, clearing multiple lines sends garbage to opponent. Reach higher levels for faster drops and exotic animations.</p>
         <h3>Controls</h3>
         <ul>
             <li>WASD and ARROW buttons for movement</li>
@@ -87,13 +86,10 @@
             <label id="musicVolume-label">Music Volume: <input type="range" id="musicVolume" min="0" max="1" step="0.01" value="0.1"></label>
         </div>
         <div id="multiplayerControls">
-            <button id="host2Btn">Host 2P VS</button>
-            <button id="host3Btn">Host 3P VS</button>
-            <button id="host4Btn">Host 4P VS</button>
+            <button id="hostBtn">Host VS Game</button>
             <input id="gameIdInput" placeholder="Enter Game ID to Join">
             <button id="joinBtn">Join VS Game</button>
             <div id="gameIdDisplay" style="display:none;">Your Game ID: <span id="gameId"></span></div>
-            <div id="playersJoined" style="display:none;">Players joined: 1/?</div>
         </div>
         <div id="gameArea">
             <div id="boards">
@@ -128,24 +124,23 @@
     <script>
         const canvas = document.getElementById('tetrisCanvas');
         const ctx = canvas.getContext('2d');
+        const opponentCanvas = document.getElementById('opponentCanvas');
+        const ctxOpponent = opponentCanvas.getContext('2d');
         const previewCanvas = document.getElementById('previewCanvas');
         const ctxPreview = previewCanvas.getContext('2d');
         const ROW = 20, COL = 10, SQ = 20, VACANT = '#111';
         let board = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
-        let allBoards = {};
-        let allPieces = {};
-        let allScores = {};
-        let allLevels = {};
-        let allActive = {};
+        let opponentBoard = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
+        let opponentPiece = null;
         let score = 0;
+        let opponentScore = 0;
         let level = 1;
+        let opponentLevel = 1;
         let paused = true;
-        let myGameOver = false;
+        let gameOver = false;
         let gameStarted = false;
         let isMultiplayer = false;
         let isHost = false;
-        let myPlayerId = 1;
-        let maxPlayers = 2;
         let baseInterval = 500;
         let rotateSoundIndex = 0;
         let softDropActive = false;
@@ -164,13 +159,13 @@
         let consecutiveCount = 0;
         let peer = null;
         let conn = null;
-        let conns = [];
-        let allCtx = {};
         const isMobile = window.innerWidth <= 600;
 
         if (isMobile) {
             previewCanvas.width = 48;
             previewCanvas.height = 48;
+            opponentCanvas.width = 37.5;
+            opponentCanvas.height = 75;
         }
 
         function initAudioContext() {
@@ -287,11 +282,11 @@
                 this.x = Math.floor(COL / 2) - Math.floor(this.shape[0].length / 2);
                 this.y = 0;
             }
-            draw(ctxDraw, offsetX = 0, offsetY = 0, alpha = 1, scale = 1, lev = level) {
+            draw(ctxDraw, offsetX = 0, offsetY = 0, alpha = 1, scale = 1) {
                 ctxDraw.globalAlpha = alpha;
                 const time = Date.now() / 200 * animationSpeed;
-                const hueAmp = Math.min(45, (lev - 1) * 4.5);
-                const lightAmp = 15 + Math.min(30, (lev - 1) * 3);
+                const hueAmp = Math.min(45, (level - 1) * 4.5);
+                const lightAmp = 15 + Math.min(30, (level - 1) * 3);
                 const sq = SQ * scale;
                 this.shape.forEach((row, dy) => row.forEach((val, dx) => {
                     if (val) {
@@ -306,14 +301,14 @@
                 }));
                 ctxDraw.globalAlpha = 1;
             }
-            drawPreview(ctxP, lev = level) {
+            drawPreview(ctxP) {
                 ctxP.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
                 const originalSize = 80;
                 const scale = previewCanvas.width / originalSize;
                 const sq = SQ * scale;
                 const time = Date.now() / 200;
-                const hueAmp = Math.min(45, (lev - 1) * 4.5);
-                const lightAmp = 15 + Math.min(30, (lev - 1) * 3);
+                const hueAmp = Math.min(45, (level - 1) * 4.5);
+                const lightAmp = 15 + Math.min(30, (level - 1) * 3);
                 const maxW = Math.max(...this.shape.map(row => row.length));
                 const maxH = this.shape.length;
                 const offsetX = (4 - maxW) / 2 * sq;
@@ -346,10 +341,10 @@
                 if (this.collide(scale)) {
                     this.x = oldX;
                     this.y = oldY;
-                    this.draw(ctx, 0, 0, 1, scale, level);
+                    this.draw(ctx, 0, 0, 1, scale);
                     return false;
                 }
-                this.draw(ctx, 0, 0, 1, scale, level);
+                this.draw(ctx, 0, 0, 1, scale);
                 sendState();
                 return true;
             }
@@ -365,7 +360,7 @@
                     rotateSoundIndex = 1 - rotateSoundIndex;
                     sendState();
                 }
-                this.draw(ctx, 0, 0, 1, scale, level);
+                this.draw(ctx, 0, 0, 1, scale);
             }
             collide(scale = 1) {
                 return this.shape.some((row, dy) => row.some((val, dx) => val && (
@@ -401,39 +396,36 @@
             }));
         }
 
-        function drawOpponentPiece(pieceData, ctxDraw, scale = 1, lev = 1) {
-            const time = Date.now() / 200;
-            const hueAmp = Math.min(45, (lev - 1) * 4.5);
-            const lightAmp = 15 + Math.min(30, (lev - 1) * 3);
+        function drawOpponentPiece(pieceData, scale = 1) {
             const sq = SQ * scale;
+            const time = Date.now() / 200;
+            const hueAmp = Math.min(45, (opponentLevel - 1) * 4.5);
+            const lightAmp = 15 + Math.min(30, (opponentLevel - 1) * 3);
             pieceData.shape.forEach((row, dy) => row.forEach((val, dx) => {
                 if (val) {
                     const hue = pieceData.hue + hueAmp * Math.sin(time / 5 + dx * 1.5 + dy);
                     const light = 50 + lightAmp * Math.sin(time * 0.7 + dx * 2 + dy * 1.2);
-                    ctxDraw.fillStyle = `hsl(${hue}, 100%, ${light}%)`;
-                    ctxDraw.fillRect((pieceData.x + dx) * sq, (pieceData.y + dy) * sq, sq, sq);
-                    ctxDraw.strokeStyle = 'black';
-                    ctxDraw.lineWidth = 1;
-                    ctxDraw.strokeRect((pieceData.x + dx) * sq, (pieceData.y + dy) * sq, sq, sq);
+                    ctxOpponent.fillStyle = `hsl(${hue}, 100%, ${light}%)`;
+                    ctxOpponent.fillRect((pieceData.x + dx) * sq, (pieceData.y + dy) * sq, sq, sq);
+                    ctxOpponent.strokeStyle = 'black';
+                    ctxOpponent.lineWidth = 1;
+                    ctxOpponent.strokeRect((pieceData.x + dx) * sq, (pieceData.y + dy) * sq, sq, sq);
                 }
             }));
         }
 
         function updateScoreDisplay() {
-            for (let p = 1; p <= maxPlayers; p++) {
-                const scoreEl = document.getElementById(`score${p}`);
-                if (scoreEl) scoreEl.textContent = `P${p} Score: ${allScores[p] || 0}`;
-            }
+            document.getElementById('score').textContent = `P1 Score: ${score}`;
+            document.getElementById('opponentScore').textContent = `P2 Score: ${opponentScore}`;
         }
 
         function updateLevel() {
             const newLevel = Math.min(11, 1 + Math.floor(score / 500));
             if (newLevel > level) {
                 level = newLevel;
-                allLevels[myPlayerId] = level;
-                const levelEl = document.getElementById('level');
-                if (levelEl) levelEl.textContent = `Level: ${level}`;
+                document.getElementById('level').textContent = `Level: ${level}`;
             }
+            document.getElementById('opponentLevel').textContent = `P2 Level: ${opponentLevel}`;
         }
 
         function getInterval() {
@@ -441,37 +433,14 @@
         }
 
         function sendState() {
-            if (!isMultiplayer || myGameOver) return;
-            const pieceData = piece ? {x: piece.x, y: piece.y, shape: piece.shape.map(row => row.slice()), hue: piece.hue} : null;
-            if (isHost) {
-                allBoards[myPlayerId] = board.map(row => row.slice());
-                allPieces[myPlayerId] = pieceData;
-                allScores[myPlayerId] = score;
-                allLevels[myPlayerId] = level;
-                allActive[myPlayerId] = !myGameOver;
-                broadcastFullState();
-            } else if (conn) {
-                conn.send({
-                    type: 'state',
-                    board: board.map(row => row.slice()),
-                    score: score,
-                    level: level,
-                    piece: pieceData
-                });
-            }
-        }
-
-        function broadcastFullState() {
-            if (!isHost) return;
-            const fullState = {
-                type: 'fullstate',
-                allBoards: Object.fromEntries(Object.entries(allBoards).map(([k, v]) => [k, v.map(row => row.slice())])),
-                allPieces,
-                allScores,
-                allLevels,
-                allActive
-            };
-            conns.forEach(c => c.send(fullState));
+            if (!isMultiplayer || !conn || gameOver) return;
+            conn.send({
+                type: 'board',
+                board: board,
+                score: score,
+                level: level,
+                piece: piece ? {x: piece.x, y: piece.y, shape: piece.shape.map(row => row.slice()), hue: piece.hue} : null
+            });
         }
 
         function drop() {
@@ -480,18 +449,7 @@
             if (!moved) {
                 merge();
                 const lines = removeLines();
-                if (isMultiplayer && lines > 1) {
-                    const amount = lines - 1;
-                    if (isHost) {
-                        for (let p = 1; p <= maxPlayers; p++) {
-                            if (p !== myPlayerId && allActive[p]) {
-                                conns[p - 2].send({type: 'garbage', amount});
-                            }
-                        }
-                    } else {
-                        conn.send({type: 'attack', lines: amount});
-                    }
-                }
+                if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
                 sendState();
                 piece = nextPiece;
                 nextPiece = new Piece();
@@ -518,7 +476,6 @@
                 }
             }
             score += lines * 100;
-            allScores[myPlayerId] = score;
             updateScoreDisplay();
             updateLevel();
             if (lines > 0 && sfxOn) playTone(400 + lines * 100, 200, 0.2);
@@ -526,7 +483,6 @@
         }
 
         function addGarbage(numLines) {
-            if (myGameOver) return;
             for (let i = 0; i < numLines; i++) {
                 board.shift();
                 let row = Array(COL).fill('hsl(0, 0%, 50%)');
@@ -537,147 +493,112 @@
             if (sfxOn) playTone(200, 200, 0.2);
         }
 
-        function checkWin() {
-            if (!isHost) return;
-            const activePlayers = Object.values(allActive).filter(a => a).length;
-            if (activePlayers === 1) {
-                const winnerId = Object.keys(allActive).find(p => allActive[p]);
-                if (winnerId == myPlayerId) {
-                    endGame(true);
-                } else {
-                    conns[winnerId - 2].send({type: 'win'});
-                }
-            }
-        }
-
         function endGame(win = false) {
-            myGameOver = true;
-            allActive[myPlayerId] = false;
+            gameOver = true;
             document.getElementById('gameOver').style.display = 'block';
             document.getElementById('scoreDisplay').textContent = score;
             document.getElementById('gameOverTitle').textContent = win ? 'You Win!' : 'Simulation Over';
-            if (isMultiplayer && isHost) {
-                checkWin();
-                broadcastFullState();
-            } else if (isMultiplayer && conn) {
-                conn.send({type: 'gameover'});
-            }
+            if (isMultiplayer && conn && !win) conn.send({type: 'gameover'});
             if (isMultiplayer && !isHost) document.getElementById('restartBtn').style.display = 'none';
         }
 
         function restart(singleplayer = true) {
-            const gameArea = document.getElementById('gameArea');
-            gameArea.innerHTML = '';
-            if (singleplayer) {
-                document.body.classList.add('singleplayer');
-                document.body.classList.remove('multiplayer');
-                const boards = document.createElement('div');
-                boards.id = 'boards';
-                const tetrisCanvasEl = document.createElement('canvas');
-                tetrisCanvasEl.id = 'tetrisCanvas';
-                tetrisCanvasEl.width = 200;
-                tetrisCanvasEl.height = 400;
-                boards.appendChild(tetrisCanvasEl);
-                gameArea.appendChild(boards);
-                ctx = tetrisCanvasEl.getContext('2d');
-                const opponentArea = document.createElement('div');
-                opponentArea.id = 'opponentArea';
-                opponentArea.style.display = 'none';
-                gameArea.appendChild(opponentArea);
-                const rightSide = document.createElement('div');
-                rightSide.id = 'rightSide';
-                const scoreEl = document.createElement('div');
-                scoreEl.id = 'score';
-                scoreEl.textContent = `P1 Score: 0`;
-                rightSide.appendChild(scoreEl);
-                const levelEl = document.createElement('div');
-                levelEl.id = 'level';
-                levelEl.textContent = `Level: 1`;
-                rightSide.appendChild(levelEl);
-                const previewCanvasEl = document.createElement('canvas');
-                previewCanvasEl.id = 'previewCanvas';
-                previewCanvasEl.width = isMobile ? 48 : 80;
-                previewCanvasEl.height = isMobile ? 48 : 80;
-                rightSide.appendChild(previewCanvasEl);
-                gameArea.appendChild(rightSide);
-                ctxPreview = previewCanvasEl.getContext('2d');
-                board = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
-                score = 0;
-                level = 1;
-                document.getElementById('score').textContent = `P1 Score: ${score}`;
-                document.getElementById('level').textContent = `Level: ${level}`;
-                document.getElementById('level').style.display = 'inline-block';
-                document.getElementById('opponentArea').style.display = 'none';
-            } else {
+            // Reset layout to original
+            const tetrisCanvasEl = document.getElementById('tetrisCanvas');
+            const opponentCanvasEl = document.getElementById('opponentCanvas');
+            const previewCanvasEl = document.getElementById('previewCanvas');
+            const scoreEl = document.getElementById('score');
+            const levelEl = document.getElementById('level');
+            const opponentScoreEl = document.getElementById('opponentScore');
+            const opponentLevelEl = document.getElementById('opponentLevel');
+
+            const oa = document.getElementById('opponentArea');
+            oa.innerHTML = '';
+            oa.appendChild(opponentCanvasEl);
+            oa.appendChild(opponentScoreEl);
+            oa.appendChild(opponentLevelEl);
+
+            const rs = document.getElementById('rightSide');
+            rs.innerHTML = '';
+            rs.appendChild(scoreEl);
+            rs.appendChild(levelEl);
+            rs.appendChild(previewCanvasEl);
+
+            const bds = document.getElementById('boards');
+            bds.innerHTML = '';
+            bds.appendChild(tetrisCanvasEl);
+            bds.style.flexDirection = 'row';
+            bds.style.alignItems = 'flex-start';
+
+            const existingSC = document.getElementById('scoresContainer');
+            if (existingSC) existingSC.remove();
+
+            board = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
+            opponentBoard = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
+            opponentPiece = null;
+            score = 0;
+            opponentScore = 0;
+            level = 1;
+            opponentLevel = 1;
+            updateScoreDisplay();
+            document.getElementById('level').textContent = `Level: ${level}`;
+            gameOver = false;
+            paused = false;
+            gameStarted = true;
+            isMultiplayer = !singleplayer;
+            if (isMultiplayer) {
                 document.body.classList.add('multiplayer');
                 document.body.classList.remove('singleplayer');
-                allCtx = {};
-                for (let p = 1; p <= maxPlayers; p++) {
-                    allBoards[p] = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
-                    allPieces[p] = null;
-                    allScores[p] = 0;
-                    allLevels[p] = 1;
-                    allActive[p] = true;
-                }
-                board = allBoards[myPlayerId];
-                score = allScores[myPlayerId];
-                level = allLevels[myPlayerId];
-                const playerAreas = [];
-                for (let p = 1; p <= maxPlayers; p++) {
-                    const pa = document.createElement('div');
-                    pa.className = 'playerArea';
-                    pa.id = `playerArea${p}`;
-                    const can = document.createElement('canvas');
-                    can.id = `canvas${p}`;
-                    if (p === myPlayerId) {
-                        can.width = 200;
-                        can.height = 400;
-                    } else {
-                        can.width = isMobile ? 37.5 : 100;
-                        can.height = isMobile ? 75 : 200;
-                    }
-                    pa.appendChild(can);
-                    allCtx[p] = can.getContext('2d');
-                    const scoreDiv = document.createElement('div');
-                    scoreDiv.id = `score${p}`;
-                    scoreDiv.textContent = `P${p} Score: 0`;
-                    pa.appendChild(scoreDiv);
-                    playerAreas.push(pa);
-                    gameArea.appendChild(pa);
-                }
-                ctx = allCtx[myPlayerId];
-                const selfPa = playerAreas[myPlayerId - 1];
-                const levelDiv = document.createElement('div');
-                levelDiv.id = 'level';
-                levelDiv.textContent = `Level: ${level}`;
-                selfPa.appendChild(levelDiv);
-                const preview = document.createElement('canvas');
-                preview.id = 'previewCanvas';
-                preview.width = isMobile ? 48 : 80;
-                preview.height = isMobile ? 48 : 80;
-                selfPa.appendChild(preview);
-                ctxPreview = preview.getContext('2d');
-                if (isMobile) {
-                    gameArea.style.flexDirection = 'column';
-                    const oppContainer = document.createElement('div');
-                    oppContainer.style.display = 'flex';
-                    oppContainer.style.justifyContent = 'space-around';
-                    playerAreas.filter((_, idx) => idx + 1 !== myPlayerId).forEach(pa => oppContainer.appendChild(pa));
-                    gameArea.insertBefore(oppContainer, playerAreas[myPlayerId - 1]);
-                    document.querySelectorAll('[id^=score]').forEach(s => s.style.fontSize = '10px');
-                } else {
-                    gameArea.style.flexDirection = 'row';
-                    gameArea.style.justifyContent = 'center';
-                }
+                document.getElementById('level').style.display = 'none';
+                document.getElementById('opponentLevel').style.display = 'none';
+            } else {
+                document.body.classList.add('singleplayer');
+                document.body.classList.remove('multiplayer');
+                document.getElementById('level').style.display = 'inline-block';
+                document.getElementById('opponentLevel').style.display = 'none';
             }
+            document.getElementById('opponentArea').style.display = singleplayer ? 'none' : 'flex';
+
+            if (isMultiplayer && isMobile) {
+                const scoresContainer = document.createElement('div');
+                scoresContainer.id = 'scoresContainer';
+                document.getElementById('gameArea').insertBefore(scoresContainer, document.getElementById('gameArea').firstChild);
+                scoresContainer.appendChild(opponentScoreEl);
+                scoresContainer.appendChild(scoreEl);
+                scoresContainer.style.display = 'flex';
+                scoresContainer.style.justifyContent = 'space-around';
+                scoresContainer.style.width = '100%';
+                opponentScoreEl.style.fontSize = '16px';
+                opponentScoreEl.style.margin = '5px';
+                bds.insertBefore(opponentCanvasEl, tetrisCanvasEl);
+                bds.style.display = 'flex';
+                bds.style.flexDirection = 'row';
+                bds.style.alignItems = 'flex-start';
+                bds.style.justifyContent = 'center';
+                document.getElementById('opponentArea').style.display = 'none';
+                // Move preview above scores
+                const gameArea = document.getElementById('gameArea');
+                gameArea.insertBefore(rs, scoresContainer);
+                // Add P2 label below P2 canvas without moving canvases
+                const opponentWrapper = document.createElement('div');
+                opponentWrapper.style.display = 'flex';
+                opponentWrapper.style.flexDirection = 'column';
+                opponentWrapper.style.alignItems = 'center';
+                bds.removeChild(opponentCanvasEl);
+                opponentWrapper.appendChild(opponentCanvasEl);
+                const p2Label = document.createElement('div');
+                p2Label.textContent = 'P2';
+                p2Label.style.fontSize = '10px';
+                p2Label.style.margin = '2px 0 0 0';
+                p2Label.style.color = 'white';
+                opponentWrapper.appendChild(p2Label);
+                bds.insertBefore(opponentWrapper, tetrisCanvasEl);
+            }
+
             lastType = -1;
             consecutiveCount = 0;
             piece = new Piece();
             nextPiece = new Piece();
-            myGameOver = false;
-            paused = false;
-            gameStarted = true;
-            isMultiplayer = !singleplayer;
             document.getElementById('gameOver').style.display = 'none';
             document.getElementById('startBtn').style.display = 'none';
             document.getElementById('resumeBtn').style.display = 'none';
@@ -689,7 +610,6 @@
             });
             sendState();
             dropStart = Date.now();
-            updateScoreDisplay();
         }
 
         function togglePause() {
@@ -704,83 +624,44 @@
         }
 
         function gameLoop() {
-            if (!paused && !myGameOver) {
+            if (!paused && !gameOver) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawBoard(ctx, board);
                 if (isMultiplayer) {
-                    for (let p = 1; p <= maxPlayers; p++) {
-                        const c = allCtx[p];
-                        const s = (p === myPlayerId) ? 1 : (isMobile ? 0.1875 : 0.5);
-                        c.clearRect(0, 0, c.width, c.height);
-                        drawBoard(c, allBoards[p] || board, s);
-                        if (allPieces[p]) drawOpponentPiece(allPieces[p], c, s, allLevels[p]);
-                    }
-                    nextPiece.drawPreview(ctxPreview, level);
-                    if (hardDropping) {
-                        const elapsed = Date.now() - hardDropStart;
-                        const progress = Math.min(1, elapsed / hardDropAnimTime);
-                        if (progress >= 1) {
-                            hardDropping = false;
-                            piece.y += hardDropDist;
-                            merge();
-                            const lines = removeLines();
-                            if (lines > 1) {
-                                const amount = lines - 1;
-                                if (isHost) {
-                                    for (let op = 1; op <= maxPlayers; op++) {
-                                        if (op !== myPlayerId && allActive[op]) {
-                                            conns[op - 2].send({type: 'garbage', amount});
-                                        }
-                                    }
-                                } else {
-                                    conn.send({type: 'attack', lines: amount});
-                                }
-                            }
-                            sendState();
-                            piece = nextPiece;
-                            nextPiece = new Piece();
-                            if (piece.collide()) endGame();
-                            dropStart = Date.now();
-                            sendState();
-                        } else {
-                            const offset = progress * hardDropDist * SQ;
-                            piece.draw(ctx, 0, offset - 7, 0.5, 1, level);
-                            piece.draw(ctx, 0, offset, 1, 1, level);
-                        }
+                    ctxOpponent.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
+                    const oppScale = isMobile ? 0.1875 : 1;
+                    drawBoard(ctxOpponent, opponentBoard, oppScale);
+                    if (opponentPiece) drawOpponentPiece(opponentPiece, oppScale);
+                }
+                nextPiece.drawPreview(ctxPreview);
+                if (hardDropping) {
+                    const elapsed = Date.now() - hardDropStart;
+                    const progress = Math.min(1, elapsed / hardDropAnimTime);
+                    if (progress >= 1) {
+                        hardDropping = false;
+                        piece.y += hardDropDist;
+                        merge();
+                        const lines = removeLines();
+                        if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
+                        sendState();
+                        piece = nextPiece;
+                        nextPiece = new Piece();
+                        if (piece.collide()) endGame();
+                        dropStart = Date.now();
+                        sendState();
                     } else {
-                        if (softDropActive) piece.draw(ctx, 0, -5, 0.5, 1, level);
-                        if (lastHorizontalDir !== 0) piece.draw(ctx, lastHorizontalDir * -3, 0, 0.5, 1, level);
-                        piece.draw(ctx, 0, 0, 1, 1, level);
-                        if (Date.now() - dropStart > getInterval()) drop();
+                        const offset = progress * hardDropDist * SQ;
+                        piece.draw(ctx, 0, offset - 7, 0.5);
+                        piece.draw(ctx, 0, offset, 1);
                     }
                 } else {
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    drawBoard(ctx, board);
-                    nextPiece.drawPreview(ctxPreview, level);
-                    if (hardDropping) {
-                        const elapsed = Date.now() - hardDropStart;
-                        const progress = Math.min(1, elapsed / hardDropAnimTime);
-                        if (progress >= 1) {
-                            hardDropping = false;
-                            piece.y += hardDropDist;
-                            merge();
-                            removeLines();
-                            piece = nextPiece;
-                            nextPiece = new Piece();
-                            if (piece.collide()) endGame();
-                            dropStart = Date.now();
-                        } else {
-                            const offset = progress * hardDropDist * SQ;
-                            piece.draw(ctx, 0, offset - 7, 0.5, 1, level);
-                            piece.draw(ctx, 0, offset, 1, 1, level);
-                        }
-                    } else {
-                        if (softDropActive) piece.draw(ctx, 0, -5, 0.5, 1, level);
-                        if (lastHorizontalDir !== 0) piece.draw(ctx, lastHorizontalDir * -3, 0, 0.5, 1, level);
-                        piece.draw(ctx, 0, 0, 1, 1, level);
-                        if (Date.now() - dropStart > getInterval()) drop();
-                    }
+                    if (softDropActive) piece.draw(ctx, 0, -5, 0.5);
+                    if (lastHorizontalDir !== 0) piece.draw(ctx, lastHorizontalDir * -3, 0, 0.5);
+                    piece.draw(ctx);
+                    if (Date.now() - dropStart > getInterval()) drop();
                 }
             } else {
-                nextPiece.drawPreview(ctxPreview, level);
+                nextPiece.drawPreview(ctxPreview);
             }
             requestAnimationFrame(gameLoop);
         }
@@ -800,31 +681,13 @@
                     { urls: 'stun:stun1.l.google.com:19302' },
                     { urls: 'stun:stun2.l.google.com:19302' },
                     { urls: 'stun:stun3.l.google.com:19302' },
-                    { urls: 'stun:stun4.l.google.com:19302' },
-                    { urls: 'stun:global.stun.twilio.com:3478' },
-                    {
-                        urls: 'turn:openrelay.metered.ca:80',
-                        username: 'openrelayproject',
-                        credential: 'openrelayprojectpassword'
-                    },
-                    {
-                        urls: 'turn:openrelay.metered.ca:443',
-                        username: 'openrelayproject',
-                        credential: 'openrelayprojectpassword'
-                    },
-                    {
-                        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-                        username: 'openrelayproject',
-                        credential: 'openrelayprojectpassword'
-                    }
+                    { urls: 'stun:stun4.l.google.com:19302' }
                 ]
             }
         };
 
-        function setupMultiplayer(host, joinId = null, players = 2) {
-            maxPlayers = players;
+        function setupMultiplayer(host, joinId = null) {
             isHost = host;
-            conns = [];
             if (host) {
                 const shortId = generateShortId();
                 peer = new Peer(shortId, peerConfig);
@@ -832,32 +695,17 @@
                     console.log('Peer open with ID:', id);
                     document.getElementById('gameId').textContent = id;
                     document.getElementById('gameIdDisplay').style.display = 'block';
-                    document.getElementById('playersJoined').style.display = 'block';
-                    document.getElementById('playersJoined').textContent = `Players joined: 1/${maxPlayers}`;
                 });
                 peer.on('connection', connection => {
-                    if (conns.length >= maxPlayers - 1) {
-                        connection.close();
-                        return;
-                    }
-                    setupConnection(connection);
-                    connection.on('open', () => {
-                        const playerId = conns.length + 2;
-                        connection.playerId = playerId;
-                        connection.send({type: 'assign', playerId, maxPlayers});
-                        conns.push(connection);
-                        document.getElementById('playersJoined').textContent = `Players joined: ${conns.length + 1}/${maxPlayers}`;
-                        if (conns.length === maxPlayers - 1) {
-                            restart(false);
-                            conns.forEach(c => c.send({type: 'start'}));
-                        }
-                    });
+                    conn = connection;
+                    setupConnection();
+                    conn.on('open', onConnectionOpen);
                 });
                 peer.on('error', err => {
                     console.error('Peer error:', err.type, err.message);
                     if (err.type === 'unavailable-id') {
                         peer.destroy();
-                        setupMultiplayer(true, null, maxPlayers);
+                        setupMultiplayer(true);
                     } else {
                         alert(`Peer error: ${err.type} - ${err.message}`);
                     }
@@ -867,11 +715,7 @@
                 peer.on('open', () => {
                     console.log('Peer open for joiner');
                     if (joinId) {
-                        conn = peer.connect(joinId);
-                        setupConnection(conn);
-                        conn.on('open', () => {
-                            console.log('Connection open for joiner');
-                        });
+                        joinMultiplayer(joinId);
                     }
                 });
                 peer.on('error', err => {
@@ -881,69 +725,52 @@
             }
         }
 
-        function setupConnection(connection) {
-            connection.on('data', data => {
-                if (isHost) {
-                    const senderId = connection.playerId;
-                    if (data.type === 'state') {
-                        allBoards[senderId] = data.board;
-                        allPieces[senderId] = data.piece;
-                        allScores[senderId] = data.score;
-                        allLevels[senderId] = data.level;
-                        broadcastFullState();
-                    } else if (data.type === 'attack') {
-                        const amount = data.lines;
-                        for (let p = 1; p <= maxPlayers; p++) {
-                            if (p !== senderId && allActive[p]) {
-                                if (p === myPlayerId) {
-                                    addGarbage(amount);
-                                } else {
-                                    conns[p - 2].send({type: 'garbage', amount});
-                                }
-                            }
-                        }
-                    } else if (data.type === 'gameover') {
-                        allActive[senderId] = false;
-                        checkWin();
-                        broadcastFullState();
-                    } else if (data.type === 'restart') {
-                        restart(false);
-                    }
-                } else {
-                    if (data.type === 'assign') {
-                        myPlayerId = data.playerId;
-                        maxPlayers = data.maxPlayers;
-                    } else if (data.type === 'start') {
-                        restart(false);
-                    } else if (data.type === 'fullstate') {
-                        allBoards = data.allBoards;
-                        allPieces = data.allPieces;
-                        allScores = data.allScores;
-                        allLevels = data.allLevels;
-                        allActive = data.allActive;
-                        updateScoreDisplay();
-                    } else if (data.type === 'garbage') {
-                        addGarbage(data.amount);
-                    } else if (data.type === 'win') {
-                        endGame(true);
-                    } else if (data.type === 'restart') {
-                        restart(false);
-                    }
+        function joinMultiplayer(id) {
+            conn = peer.connect(id);
+            setupConnection();
+            conn.on('open', onConnectionOpen);
+        }
+
+        function setupConnection() {
+            conn.on('data', data => {
+                if (data.type === 'attack') addGarbage(data.lines);
+                if (data.type === 'board') {
+                    opponentBoard = data.board;
+                    opponentScore = data.score;
+                    opponentLevel = data.level;
+                    opponentPiece = data.piece;
+                    updateScoreDisplay();
+                    updateLevel();
+                }
+                if (data.type === 'gameover') endGame(true);
+                if (data.type === 'ready') {
+                    paused = false;
+                    dropStart = Date.now();
+                }
+                if (data.type === 'restart') {
+                    restart(false);
                 }
             });
-            connection.on('close', () => {
+            conn.on('close', () => {
                 console.log('Connection closed');
                 alert('Opponent disconnected.');
-                endGame();
+                endGame(true);
             });
-            connection.on('error', err => {
+            conn.on('error', err => {
                 console.error('Connection error:', err);
                 alert(`Connection error: ${err}`);
             });
         }
 
+        function onConnectionOpen() {
+            console.log('Connection open');
+            restart(false);
+            conn.send({type: 'ready'});
+            sendState();
+        }
+
         document.addEventListener('keydown', e => {
-            if (myGameOver || hardDropping) return;
+            if (gameOver || hardDropping) return;
             if (e.key === 'Escape') {
                 if (!gameStarted) return;
                 togglePause();
@@ -972,18 +799,7 @@
                 } else {
                     merge();
                     const lines = removeLines();
-                    if (isMultiplayer && lines > 1) {
-                        const amount = lines - 1;
-                        if (isHost) {
-                            for (let p = 1; p <= maxPlayers; p++) {
-                                if (p !== myPlayerId && allActive[p]) {
-                                    conns[p - 2].send({type: 'garbage', amount});
-                                }
-                            }
-                        } else {
-                            conn.send({type: 'attack', lines: amount});
-                        }
-                    }
+                    if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
                     sendState();
                     piece = nextPiece;
                     nextPiece = new Piece();
@@ -1020,6 +836,57 @@
             }
         });
 
+        let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
+        canvas.addEventListener('touchstart', e => {
+            if (paused || gameOver || hardDropping) return;
+            e.preventDefault();
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+        });
+
+        canvas.addEventListener('touchmove', e => {
+            if (paused || gameOver || hardDropping) return;
+            e.preventDefault();
+            touchEndX = e.changedTouches[0].screenX;
+            touchEndY = e.changedTouches[0].screenY;
+        });
+
+        canvas.addEventListener('touchend', e => {
+            if (paused || gameOver || hardDropping) return;
+            e.preventDefault();
+            const deltaX = touchEndX - touchStartX;
+            const deltaY = touchEndY - touchStartY;
+            if (deltaY > 30) {
+                hardDropDist = 0;
+                let tempY = piece.y;
+                while (true) {
+                    piece.y++;
+                    if (piece.collide()) {
+                        piece.y = tempY;
+                        break;
+                    }
+                    hardDropDist++;
+                }
+                if (hardDropDist > 0) {
+                    animationSpeed = 2.11;
+                    hardDropAnimTime = hardDropDist * 25;
+                    setTimeout(() => animationSpeed = 1, hardDropAnimTime);
+                    hardDropping = true;
+                    hardDropStart = Date.now();
+                } else {
+                    merge();
+                    const lines = removeLines();
+                    if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
+                    sendState();
+                    piece = nextPiece;
+                    nextPiece = new Piece();
+                    if (piece.collide()) endGame();
+                    dropStart = Date.now();
+                    sendState();
+                }
+            }
+        });
+
         const mobileLeft = document.getElementById('mobileLeft');
         const mobileRight = document.getElementById('mobileRight');
         const mobileDown = document.getElementById('mobileDown');
@@ -1038,7 +905,7 @@
         }
 
         function handleButtonPress(dir) {
-            if (paused || myGameOver || hardDropping) return;
+            if (paused || gameOver || hardDropping) return;
             if (dir === 'left') {
                 lastHorizontalDir = -1;
                 piece.move({x: -1, y: 0});
@@ -1072,18 +939,7 @@
                 } else {
                     merge();
                     const lines = removeLines();
-                    if (isMultiplayer && lines > 1) {
-                        const amount = lines - 1;
-                        if (isHost) {
-                            for (let p = 1; p <= maxPlayers; p++) {
-                                if (p !== myPlayerId && allActive[p]) {
-                                    conns[p - 2].send({type: 'garbage', amount});
-                                }
-                            }
-                        } else {
-                            conn.send({type: 'attack', lines: amount});
-                        }
-                    }
+                    if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
                     sendState();
                     piece = nextPiece;
                     nextPiece = new Piece();
@@ -1110,50 +966,32 @@
 
         document.getElementById('startBtn').addEventListener('click', () => {
             baseInterval = parseInt(document.getElementById('difficulty').value);
-            restart(true);
+            paused = false;
+            gameStarted = true;
+            piece = nextPiece;
+            nextPiece = new Piece();
+            document.getElementById('startBtn').style.display = 'none';
+            document.getElementById('pauseBtn').style.display = 'inline';
+            dropStart = Date.now();
             initAudioContext().then(() => {
                 playSilent();
                 if (musicOn) playTheme();
             });
         });
 
-        document.getElementById('host2Btn').addEventListener('click', () => {
+        document.getElementById('hostBtn').addEventListener('click', () => {
             baseInterval = parseInt(document.getElementById('difficulty').value);
-            document.getElementById('host2Btn').style.display = 'none';
-            document.getElementById('host3Btn').style.display = 'none';
-            document.getElementById('host4Btn').style.display = 'none';
+            document.getElementById('hostBtn').style.display = 'none';
             document.getElementById('joinBtn').style.display = 'none';
             document.getElementById('gameIdInput').style.display = 'none';
-            setupMultiplayer(true, null, 2);
-        });
-
-        document.getElementById('host3Btn').addEventListener('click', () => {
-            baseInterval = parseInt(document.getElementById('difficulty').value);
-            document.getElementById('host2Btn').style.display = 'none';
-            document.getElementById('host3Btn').style.display = 'none';
-            document.getElementById('host4Btn').style.display = 'none';
-            document.getElementById('joinBtn').style.display = 'none';
-            document.getElementById('gameIdInput').style.display = 'none';
-            setupMultiplayer(true, null, 3);
-        });
-
-        document.getElementById('host4Btn').addEventListener('click', () => {
-            baseInterval = parseInt(document.getElementById('difficulty').value);
-            document.getElementById('host2Btn').style.display = 'none';
-            document.getElementById('host3Btn').style.display = 'none';
-            document.getElementById('host4Btn').style.display = 'none';
-            document.getElementById('joinBtn').style.display = 'none';
-            document.getElementById('gameIdInput').style.display = 'none';
-            setupMultiplayer(true, null, 4);
+            setupMultiplayer(true);
         });
 
         document.getElementById('joinBtn').addEventListener('click', () => {
             const id = document.getElementById('gameIdInput').value.toUpperCase();
             if (id) {
                 baseInterval = parseInt(document.getElementById('difficulty').value);
-                document.getElementById('host2Btn').style.display = 'none';
-                document.getElementById('host3Btn').style.display = 'none';
-                document.getElementById('host4Btn').style.display = 'none';
+                document.getElementById('hostBtn').style.display = 'none';
                 document.getElementById('joinBtn').style.display = 'none';
                 document.getElementById('gameIdInput').style.display = 'none';
                 setupMultiplayer(false, id);
@@ -1167,7 +1005,7 @@
         document.getElementById('restartBtn').addEventListener('click', () => {
             if (isMultiplayer && !isHost) return;
             restart(!isMultiplayer);
-            if (isMultiplayer && conns.length > 0) conns.forEach(c => c.send({type: 'restart'}));
+            if (isMultiplayer && conn) conn.send({type: 'restart'});
         });
 
         document.getElementById('musicToggle').addEventListener('click', () => {
@@ -1191,7 +1029,7 @@
         document.getElementById('musicVolume').addEventListener('input', e => {
             musicVolume = parseFloat(e.target.value);
         });
-
+	
         updateScoreDisplay();
         gameLoop();
     </script>
