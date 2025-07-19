@@ -538,11 +538,11 @@
         }
 
         function generateShortId() {
-            const uid = new ShortUniqueId({ length: 3 });
+            const uid = new ShortUniqueId({ length: 4 });
             return uid.rnd().toUpperCase();
         }
 
-        function setupMultiplayer(isHost) {
+        function setupMultiplayer(isHost, joinId = null) {
             if (isHost) {
                 const shortId = generateShortId();
                 peer = new Peer(shortId);
@@ -559,11 +559,18 @@
                     if (err.type === 'unavailable-id') {
                         peer.destroy();
                         setupMultiplayer(true); // Retry with new ID
+                    } else {
+                        alert(`Peer error: ${err.type} - ${err.message}`);
                     }
                 });
             } else {
                 peer = new Peer();
-                peer.on('open', () => {});
+                peer.on('open', () => {
+                    if (joinId) {
+                        joinMultiplayer(joinId);
+                    }
+                });
+                peer.on('error', err => alert(`Peer error: ${err.type} - ${err.message}`));
             }
         }
 
@@ -593,6 +600,7 @@
                 alert('Opponent disconnected.');
                 endGame(true);
             });
+            conn.on('error', err => alert(`Connection error: ${err}`));
         }
 
         function onConnectionOpen() {
@@ -822,8 +830,7 @@
                 document.getElementById('hostBtn').style.display = 'none';
                 document.getElementById('joinBtn').style.display = 'none';
                 document.getElementById('gameIdInput').style.display = 'none';
-                setupMultiplayer(false);
-                joinMultiplayer(id);
+                setupMultiplayer(false, id);
             }
         });
 
