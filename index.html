@@ -34,18 +34,18 @@
             #sidebar { width: auto; text-align: center; }
             #sidebar ul { padding-left: 0; }
             #controls { order: 0; text-align: center; display: flex; flex-direction: column; align-items: center; }
-            #gameArea { flex-direction: column; align-items: center; flex-wrap: nowrap; justify-content: center; }
-            #boards { display: flex; flex-direction: row; justify-content: center; align-items: flex-start; }
+            #gameArea { flex-direction: row; align-items: flex-start; flex-wrap: nowrap; justify-content: center; }
+            #boards { display: flex; flex-direction: row; justify-content: center; align-items: flex-start; order: 3; }
             #previewCanvas { margin: 10px 0 0 0; width: 48px; height: 48px; }
             #tetrisCanvas { width: 200px; height: 400px; }
             #opponentCanvas { width: 37.5px; height: 75px; }
-            #rightSide { flex-direction: column; align-items: center; margin-top: 10px; justify-content: center; flex-basis: auto; }
+            #rightSide { flex-direction: column; align-items: center; margin-top: 0; justify-content: flex-start; flex-basis: auto; order: 1; }
             #score, #level { font-size: 16px; margin: 5px; width: auto; text-align: center; min-width: auto; }
             #mobileControls { display: block; }
             #musicVolume-label { display: none; }
             #startBtn { order: 3; align-self: center; }
             #sfxToggle { margin-right: 10px; }
-            #opponentArea { margin-left: 10px; margin-top: 0; }
+            #opponentArea { margin-left: 10px; margin-top: 0; order: 2; }
             #opponentScore, #opponentLevel { font-size: 10px; margin: 2px; }
         }
         @media (min-width: 601px) {
@@ -91,14 +91,14 @@
         <div id="gameArea">
             <div id="boards">
                 <canvas id="tetrisCanvas" width="200" height="400"></canvas>
-                <div id="opponentArea" style="display:none;">
-                    <canvas id="opponentCanvas" width="200" height="400"></canvas>
-                    <div id="opponentScore">P2 Score: 0</div>
-                    <div id="opponentLevel">P2 Level: 1</div>
-                </div>
+            </div>
+            <div id="opponentArea" style="display:none;">
+                <canvas id="opponentCanvas" width="200" height="400"></canvas>
+                <div id="opponentScore">P2 Score: 0</div>
+                <div id="opponentLevel">P2 Level: 1</div>
             </div>
             <div id="rightSide">
-                <div id="score">Score: 0</div>
+                <div id="score">P1 Score: 0</div>
                 <div id="level">Level: 1</div>
                 <canvas id="previewCanvas" width="80" height="80"></canvas>
             </div>
@@ -411,7 +411,7 @@
         }
 
         function updateScoreDisplay() {
-            document.getElementById('score').textContent = `Score: ${score}`;
+            document.getElementById('score').textContent = `P1 Score: ${score}`;
             document.getElementById('opponentScore').textContent = `P2 Score: ${opponentScore}`;
         }
 
@@ -513,23 +513,6 @@
             gameStarted = true;
             isMultiplayer = !singleplayer;
             document.getElementById('opponentArea').style.display = singleplayer ? 'none' : 'flex';
-            const rightSide = document.getElementById('rightSide');
-            const gameArea = document.getElementById('gameArea');
-            const opponentArea = document.getElementById('opponentArea');
-            if (singleplayer) {
-                if (rightSide.parentNode !== gameArea) {
-                    gameArea.appendChild(rightSide);
-                }
-            } else if (window.innerWidth <= 600) {
-                if (rightSide.parentNode !== opponentArea) {
-                    const insertBeforeElem = document.getElementById('opponentScore');
-                    opponentArea.insertBefore(rightSide, insertBeforeElem);
-                }
-            } else {
-                if (rightSide.parentNode !== gameArea) {
-                    gameArea.appendChild(rightSide);
-                }
-            }
             lastType = -1;
             consecutiveCount = 0;
             piece = new Piece();
