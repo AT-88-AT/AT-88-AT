@@ -513,6 +513,23 @@
             gameStarted = true;
             isMultiplayer = !singleplayer;
             document.getElementById('opponentArea').style.display = singleplayer ? 'none' : 'flex';
+            const rightSide = document.getElementById('rightSide');
+            const gameArea = document.getElementById('gameArea');
+            const opponentArea = document.getElementById('opponentArea');
+            if (singleplayer) {
+                if (rightSide.parentNode !== gameArea) {
+                    gameArea.appendChild(rightSide);
+                }
+            } else if (window.innerWidth <= 600) {
+                if (rightSide.parentNode !== opponentArea) {
+                    const insertBeforeElem = document.getElementById('opponentScore');
+                    opponentArea.insertBefore(rightSide, insertBeforeElem);
+                }
+            } else {
+                if (rightSide.parentNode !== gameArea) {
+                    gameArea.appendChild(rightSide);
+                }
+            }
             lastType = -1;
             consecutiveCount = 0;
             piece = new Piece();
