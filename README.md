@@ -1,2 +1,0 @@
-# TTrs-Online
-TTrs Test
