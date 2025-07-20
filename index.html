@@ -115,7 +115,7 @@
         <p>Score: <span id="scoreDisplay">0</span></p>
         <button id="restartBtn">Restart?</button>
     </div>
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/peerjs@latest/dist/peerjs.min.js"></script>
     <script>
         const canvas = document.getElementById('tetrisCanvas');
         const ctx = canvas.getContext('2d');
@@ -123,8 +123,8 @@
         const ctxOpponent = opponentCanvas.getContext('2d');
         const previewCanvas = document.getElementById('previewCanvas');
         const ctxPreview = previewCanvas.getContext('2d');
-        const ROW = 20, COL = 10, VACANT = 0;
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 600;
+        const ROW = 20, COL = 10, VACANT = '#111';
+        const isMobile = window.innerWidth <= 600;
         let SQ = isMobile ? 20.88 : 30;
         let board = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
         let opponentBoard = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
@@ -140,7 +140,7 @@
         let isHost = false;
         let rotateSoundIndex = 0;
         let softDropActive = false;
-        let musicOn = false;
+        let musicOn = true;
         let sfxOn = true;
         let musicVolume = 0.1;
         let lastHorizontalDir = 0;
@@ -155,14 +155,13 @@
         let peer = null;
         let conn = null;
         let moveInterval;
-        let lastSendTime = 0;
 
         const peerConfig = {
-            host: 'peerjs.com',
+            host: '0.peerjs.com',
             port: 443,
-            path: '/',
+            path: '/',  // Added for broker compatibility
             secure: true,
-            debug: 3,
+            debug: 3,  // Enable debug logging for ICE issues (view in console)
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
@@ -170,18 +169,15 @@
                     { urls: 'stun:stun2.l.google.com:19302' },
                     { urls: 'stun:stun3.l.google.com:19302' },
                     { urls: 'stun:stun4.l.google.com:19302' },
-                    { urls: 'turn:staticauth.openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayprojectsecret' },
-                    { urls: 'turn:staticauth.openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayprojectsecret' },
-                    { urls: 'turns:staticauth.openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayprojectsecret' },
-                    { urls: 'turn:turn.anyfirewall.com:443?transport=tcp', username: 'webrtc', credential: 'webrtc' },
-                    { urls: 'turn:relay1.expressturn.com:3478', username: 'efI4V8R4T7MDY7L9', credential: '2x6n9j5d' },
-                    { urls: 'turns:relay1.expressturn.com:5349', username: 'efI4V8R4T7MDY7L9', credential: '2x6n9j5d' }
+                    { urls: 'stun:stun.stunprotocol.org:3478' },  // Added reliable STUN
+                    { urls: 'stun:stun.sipnet.net:3478' },  // Added
+                    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                    { urls: 'turn:turn.anyfirewall.com:443?transport=tcp', username: 'webrtc', credential: 'webrtc' },  // Added backup TURN
+                    { urls: 'turn:numb.viagenie.ca', username: 'free', credential: 'muazkh' }  // Added free TURN (credentials public, may expire)
                 ],
-                iceTransportPolicy: 'all',
-                iceCandidatePoolSize: 14,
-                sdpSemantics: 'unified-plan',
-                bundlePolicy: 'max-bundle',
-                rtcpMuxPolicy: 'require'
+                iceTransportPolicy: 'all',  // Allow relay if direct fails
+                iceCandidatePoolSize: 10  // Increase candidates for better traversal
             }
         };
 
@@ -336,7 +332,7 @@
             }
             undraw(scale = 1) {
                 const sq = SQ * scale;
-                ctx.fillStyle = '#111';
+                ctx.fillStyle = VACANT;
                 this.shape.forEach((row, dy) => row.forEach((val, dx) => {
                     if (val) ctx.fillRect((this.x + dx) * sq, (this.y + dy) * sq, sq, sq);
                 }));
@@ -387,7 +383,7 @@
             const sq = SQ * scale;
             boardToDraw.forEach((row, y) => row.forEach((val, x) => {
                 if (val !== VACANT) {
-                    ctxDraw.fillStyle = val === -1 ? 'hsl(0, 0%, 50%)' : `hsl(${HUES[val - 1]}, 100%, 50%)`;
+                    ctxDraw.fillStyle = val;
                     ctxDraw.fillRect(x * sq, y * sq, sq, sq);
                     ctxDraw.strokeStyle = 'black';
                     ctxDraw.lineWidth = 1;
@@ -401,22 +397,21 @@
             const time = Date.now() / 200;
             const hueAmp = Math.min(45, (opponentLevel - 1) * 4.5);
             const lightAmp = 15 + Math.min(30, (opponentLevel - 1) * 3);
-            const hueBase = HUES[pieceData.type];
-            pieceData.shape.forEach((row, dy) => row.forEach((val, valIndex) => {
+            pieceData.shape.forEach((row, dy) => row.forEach((val, dx) => {
                 if (val) {
-                    const hue = hueBase + hueAmp * Math.sin(time / 5 + valIndex * 1.5 + dy);
-                    const light = 50 + lightAmp * Math.sin(time * 0.7 + valIndex * 2 + dy * 1.2);
+                    const hue = pieceData.hue + hueAmp * Math.sin(time / 5 + dx * 1.5 + dy);
+                    const light = 50 + lightAmp * Math.sin(time * 0.7 + dx * 2 + dy * 1.2);
                     ctxOpponent.fillStyle = `hsl(${hue}, 100%, ${light}%)`;
-                    ctxOpponent.fillRect((pieceData.x + valIndex) * sq, (pieceData.y + dy) * sq, sq, sq);
+                    ctxOpponent.fillRect((pieceData.x + dx) * sq, (pieceData.y + dy) * sq, sq, sq);
                     ctxOpponent.strokeStyle = 'black';
                     ctxOpponent.lineWidth = 1;
-                    ctxOpponent.strokeRect((pieceData.x + valIndex) * sq, (pieceData.y + dy) * sq, sq, sq));
+                    ctxOpponent.strokeRect((pieceData.x + dx) * sq, (pieceData.y + dy) * sq, sq, sq);
                 }
-            });
+            }));
         }
 
         function updateScoreDisplay() {
-            document.getElementById('score").textContent = `P1 Score: ${score}`;
+            document.getElementById('score').textContent = `P1 Score: ${score}`;
             document.getElementById('opponentScore').textContent = `P2 Score: ${opponentScore}`;
         }
 
@@ -430,16 +425,13 @@
         }
 
         function sendState() {
-            if (!isMultiplayer || !conn || gameOver || !conn.open) return;
-            const now = Date.now();
-            if (now - lastSendTime < 50) return;
-            lastSendTime = now;
+            if (!isMultiplayer || !conn || gameOver) return;
             conn.send({
                 type: 'board',
                 board: board,
                 score: score,
                 level: level,
-                piece: piece ? {x: piece.x, y: piece.y, shape: piece.shape.map(row => row.slice()), type: piece.type} : null
+                piece: piece ? {x: piece.x, y: piece.y, shape: piece.shape.map(row => row.slice()), hue: piece.hue} : null
             });
         }
 
@@ -452,7 +444,7 @@
                 sendState();
                 piece = nextPiece;
                 nextPiece = new Piece();
-                sendState();
+                sendState(); // Added: Send new piece state immediately after spawn
                 if (piece.collide()) endGame();
             }
             dropStart = Date.now();
@@ -460,7 +452,7 @@
 
         function merge() {
             piece.shape.forEach((row, dy) => row.forEach((val, dx) => {
-                if (val) board[piece.y + dy][piece.x + dx] = piece.type + 1;
+                if (val) board[piece.y + dy][piece.x + dx] = `hsl(${piece.hue}, 100%, 50%)`;
             }));
             if (sfxOn) playTone(150, 150, 0.2);
         }
@@ -484,23 +476,24 @@
         }
 
         function addGarbage(numLines) {
-            if (numLines > 0) return;
-            let willTopOut = false;
-            for (let i = 0; i < numLines; i++) {
-                if (board[i].some(cell => cell !== VACANT)) {
-                    willTopOut = true;
-                    break;
+            if (numLines > 0) {
+                let willTopOut = false;
+                for (let i = 0; i < numLines; i++) {
+                    if (board[i].some(cell => cell !== VACANT)) {
+                        willTopOut = true;
+                        break;
+                    }
                 }
-            }
-            if (willTopOut) {
-                endGame();
-                return;
-            }
-            for (let i = 0; i < numLines; i++) {
-                board.shift();
-                let row = Array(COL).fill(-1);
-                row[Math.floor(Math.random() * COL)] = VACANT;
-                board.push(row);
+                if (willTopOut) {
+                    endGame();
+                    return;
+                }
+                for (let i = 0; i < numLines; i++) {
+                    board.shift();
+                    let row = Array(COL).fill('hsl(0, 0%, 50%)');
+                    row[Math.floor(Math.random() * COL)] = VACANT;
+                    board.push(row);
+                }
             }
             if (piece && piece.collide()) endGame();
             if (sfxOn) playTone(200, 200, 0.2);
@@ -515,8 +508,6 @@
             document.getElementById('resumeBtn').style.display = 'none';
             if (isMultiplayer && !isHost) document.getElementById('restartBtn').style.display = 'none';
             if (isMultiplayer && conn && !win) conn.send({type: 'gameover'});
-            if (conn) conn.close();
-            if (peer) peer.destroy();
         }
 
         function drawInitial() {
@@ -564,7 +555,6 @@
                 opponentWrapper.appendChild(document.getElementById('p2Label'));
                 boards.insertBefore(opponentWrapper, canvas);
             }
-            lastSendTime = 0;
         }
 
         function togglePause(sendToPeer = true) {
@@ -602,7 +592,7 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawBoard(ctx, board);
             if (hardDropping) {
-                const elapsed = Date.now() - hardDropStart);
+                const elapsed = Date.now() - hardDropStart;
                 const progress = Math.min(1, elapsed / hardDropAnimTime);
                 if (progress >= 1) {
                     hardDropping = false;
@@ -613,7 +603,7 @@
                     sendState();
                     piece = nextPiece;
                     nextPiece = new Piece();
-                    sendState();
+                    sendState(); // Added: Send new piece state immediately after spawn
                     if (piece.collide()) endGame();
                     dropStart = Date.now();
                 } else {
@@ -674,7 +664,7 @@
                 });
                 peer.on('error', err => {
                     console.error('PeerJS error:', err.type, err);
-                    alert(`Multiplayer error: ${err.type}. ${err.message || ''} Check console for ICE details; ensure HTTPS and TURN config. In restricted regions, use personal TURN keys.`);
+                    alert('Multiplayer error: ' + err.type + '. Check network/firewall or try different devices. Details in console.');
                 });
             } else {
                 peer = new Peer(peerConfig);
@@ -684,49 +674,26 @@
                 });
                 peer.on('error', err => {
                     console.error('PeerJS error:', err.type, err);
-                    alert(`Multiplayer error: ${err.type}. ${err.message || ''} Check console for ICE details; ensure HTTPS and TURN config. In restricted regions, use personal TURN keys.`);
+                    alert('Multiplayer error: ' + err.type + '. Check network/firewall or try different devices. Details in console.');
                 });
             }
         }
 
         function joinMultiplayer(id) {
-            conn = peer.connect(id, { reliable: true, serialization: 'json' });
-            let connectTimeout = setTimeout(() => {
-                if (!conn.open) {
-                    conn.close();
-                    alert('Connection timed out. Try again or check network.');
-                }
-            }, 15000);
-            conn.on('open', () => {
-                clearTimeout(connectTimeout);
-                onConnectionOpen();
-            });
+            conn = peer.connect(id, { reliable: true });  // Added reliable for better data transfer
             setupConnection();
+            conn.on('open', onConnectionOpen);
         }
 
         function setupConnection() {
-            conn.on('data', (data) => {
-                if (data.type === 'ping') {
-                    conn.send({type: 'pong'});
-                    missedPings = 0;
-                } else if (data.type === 'pong') {
-                    missedPings = 0;
-                } else {
-                    receiveData(data);
-                }
-            });
+            conn.on('data', receiveData);
             conn.on('close', () => {
                 alert('Opponent disconnected. You win!');
                 endGame(true);
-                clearInterval(pingInterval);
-                clearInterval(pingChecker);
             });
             conn.on('error', err => {
                 console.error('Connection error:', err);
-                alert('Connection failed. Check console for details; try alternative TURN or VPN.');
-            });
-            conn.on('iceStateChanged', state => {
-                console.log('ICE state:', state);
+                alert('Connection failed. Check console for details.');
             });
         }
 
@@ -749,20 +716,6 @@
                 scoresDiv.style.flexDirection = 'column';
                 scoresDiv.style.marginRight = '10px';
             }
-            sendState();
-            let pingInterval = setInterval(() => {
-                if (conn.open) conn.send({type: 'ping'});
-            }, 5000);
-            let missedPings = 0;
-            let pingChecker = setInterval(() => {
-                missedPings++;
-                if (missedPings > 2) {
-                    clearInterval(pingInterval);
-                    clearInterval(pingChecker);
-                    alert('Connection lost (no response). Game over.');
-                    endGame(true);
-                }
-            }, 5000);
         }
 
         function startMove(dir) {
@@ -835,7 +788,6 @@
         });
 
         const musicBtn = document.getElementById('musicToggle');
-        musicBtn.textContent = 'Music Off';
         musicBtn.addEventListener('click', () => {
             musicOn = !musicOn;
             musicBtn.textContent = musicOn ? 'Music On' : 'Music Off';
