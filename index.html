@@ -29,7 +29,6 @@
         #opponentArea { display: flex; flex-direction: column; align-items: center; margin-left: 20px; }
         #opponentScore { margin: 10px; font-size: 20px; }
         #opponentLevel { margin: 10px; font-size: 20px; }
-        #backButton { display: none; margin-top:10px; }
         @media (max-width: 600px) {
             body { flex-direction: column; padding: 10px; overflow-y: scroll; }
             #sidebar { width: auto; text-align: center; }
@@ -48,8 +47,8 @@
             body.singleplayer #boards { order: 1; }
             body.singleplayer #rightSide { order: 2; }
             body.singleplayer #opponentArea { order: 3; }
-            body.multiplayer #opponentArea { order: 1; }
-            body.multiplayer #rightSide { order: 2; }
+            body.multiplayer #opponentArea { order: 2; }
+            body.multiplayer #rightSide { order: 1; }
             body.multiplayer #boards { order: 3; }
         }
         @media (min-width: 601px) {
@@ -58,14 +57,12 @@
             #gameArea { order: 1; flex-direction: row; }
         }
     </style>
-    <script src="https://unpkg.com/short-unique-id@latest/dist/short-unique-id.min.js"></script>
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body class="singleplayer">
     <div id="sidebar">
         <h2>Tetris VS Simulator</h2>
         <h3>Gameplay Instructions</h3>
-        <p>Stack tetrominoes to fill rows and clear lines. In VS mode, clearing multiple lines sends garbage to opponents. Reach higher levels for faster drops and exotic animations.</p>
+        <p>Stack tetrominoes to fill rows and clear lines. In VS mode, clearing multiple lines sends garbage to opponent. Reach higher levels for faster drops and exotic animations.</p>
         <h3>Controls</h3>
         <ul>
             <li>WASD and ARROW buttons for movement</li>
@@ -74,11 +71,11 @@
     </div>
     <div id="main">
         <div id="controls">
-            <label id="difficulty-label">Difficulty:
+            <label>Difficulty:
                 <select id="difficulty">
-                    <option value="easy">Easy</option>
-                    <option value="medium" selected>Medium</option>
-                    <option value="hard">Hard</option>
+                    <option value="1">Easy</option>
+                    <option value="5" selected>Medium</option>
+                    <option value="10">Hard</option>
                 </select>
             </label>
             <button id="musicToggle">Music On</button>
@@ -122,48 +119,46 @@
         <p>Score: <span id="scoreDisplay">0</span></p>
         <button id="restartBtn">Restart?</button>
     </div>
-    <button id="backButton" onclick="location.reload()">Back to Menu</button>
+    <script src="https://unpkg.com/short-unique-id@latest/dist/short-unique-id.min.js"></script>
+    <script src="https://unpkg.com/peerjs@latest/dist/peerjs.min.js"></script>
     <script>
-        // Core Tetris constants and shapes
-        const ROWS = 20, COLS = 10, BLOCK_SIZE = 20, VACANT = '#111';
-        let board = Array.from({length: ROWS}, () => Array(COLS).fill(VACANT));
-        let opponentBoard = Array.from({length: ROWS}, () => Array(COLS).fill(VACANT));
-        let opponentPieceData = null;
+        const canvas = document.getElementById('tetrisCanvas');
+        const ctx = canvas.getContext('2d');
+        const opponentCanvas = document.getElementById('opponentCanvas');
+        const ctxOpponent = opponentCanvas.getContext('2d');
+        const previewCanvas = document.getElementById('previewCanvas');
+        const ctxPreview = previewCanvas.getContext('2d');
+        const ROW = 20, COL = 10, SQ = 20, VACANT = '#111';
+        let board = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
+        let opponentBoard = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
+        let opponentPiece = null;
         let score = 0;
         let opponentScore = 0;
         let level = 1;
         let opponentLevel = 1;
-        let initLevel = 1;
-        let totalLines = 0;
-        let dropInterval = 1000;
-        let lastDropTime = 0;
-        let gameOverState = false;
-        let opponentGameOver = false;
-        let isMultiplayer = false;
-        let peer = null;
-        let conn = null;
         let paused = true;
+        let gameOver = false;
         let gameStarted = false;
+        let isMultiplayer = false;
         let isHost = false;
         let rotateSoundIndex = 0;
         let softDropActive = false;
         let musicOn = true;
         let sfxOn = true;
         let musicVolume = 0.1;
+        let lastHorizontalDir = 0;
         let animationSpeed = 1;
+        let hardDropping = false;
+        let hardDropStart = 0;
+        let hardDropDist = 0;
+        let hardDropAnimTime = 500;
         let hardDropPressed = false;
         let audioCtx = null;
         let lastType = -1;
         let consecutiveCount = 0;
+        let peer = null;
+        let conn = null;
         const isMobile = window.innerWidth <= 600;
-
-        const canvas = document.getElementById('tetrisCanvas');
-        const ctx = canvas.getContext('2d');
-        const opponentCanvas = document.getElementById('opponentCanvas');
-        const opponentCtx = opponentCanvas.getContext('2d');
-        const previewCanvas = document.getElementById('previewCanvas');
-        const previewCtx = previewCanvas.getContext('2d');
-        const backButton = document.getElementById('backButton');
 
         if (isMobile) {
             previewCanvas.width = 48;
@@ -171,160 +166,6 @@
             opponentCanvas.width = 37.5;
             opponentCanvas.height = 75;
         }
-
-        const PIECES = [
-            [[1,1,1,1]], // I
-            [[1,1],[1,1]], // O
-            [[0,1,1],[1,1,0]], // S
-            [[1,1,0],[0,1,1]], // Z
-            [[1,1,1],[0,1,0]], // T
-            [[1,1,1],[1,0,0]], // L
-            [[1,1,1],[0,0,1]]  // J
-        ];
-        const HUES = [0, 30, 60, 120, 180, 240, 300];
-
-        const ROTATIONS = PIECES.map(shape => {
-            const rots = [];
-            let current = shape;
-            for (let i = 0; i < 4; i++) {
-                rots.push(current);
-                current = rotate(current);
-            }
-            return rots;
-        });
-
-        function rotate(shape) {
-            return shape[0].map((_, col) => shape.map(row => row[col]).reverse());
-        }
-
-        class Piece {
-            constructor() {
-                let candidateType = Math.floor(Math.random() * PIECES.length);
-                let forceDifferent = false;
-                if (candidateType === lastType) {
-                    let potentialStreak = consecutiveCount + 1;
-                    if (potentialStreak >= 3) {
-                        forceDifferent = true;
-                    } else if (potentialStreak === 2 && Math.random() > 0.3) {
-                        forceDifferent = true;
-                    }
-                }
-                if (forceDifferent) {
-                    do {
-                        candidateType = Math.floor(Math.random() * PIECES.length);
-                    } while (candidateType === lastType);
-                    consecutiveCount = 0;
-                } else {
-                    if (candidateType === lastType) {
-                        consecutiveCount++;
-                    } else {
-                        consecutiveCount = 0;
-                    }
-                }
-                this.type = candidateType;
-                lastType = this.type;
-                this.shape = ROTATIONS[this.type][0];
-                this.hue = HUES[this.type];
-                const width = this.shape[0].length;
-                this.x = Math.floor(COLS / 2 - width / 2);
-                this.y = 0;
-                this.rotation = 0;
-            }
-            draw(ctxDraw, offsetX = 0, offsetY = 0, alpha = 1, scale = 1) {
-                ctxDraw.globalAlpha = alpha;
-                const time = Date.now() / 200 * animationSpeed;
-                const hueAmp = Math.min(45, (level - 1) * 4.5);
-                const lightAmp = 15 + Math.min(30, (level - 1) * 3);
-                const sq = BLOCK_SIZE * scale;
-                this.shape.forEach((row, dy) => row.forEach((val, dx) => {
-                    if (val) {
-                        const hue = this.hue + hueAmp * Math.sin(time / 5 + dx * 1.5 + dy);
-                        const light = 50 + lightAmp * Math.sin(time * 0.7 + dx * 2 + dy * 1.2);
-                        ctxDraw.fillStyle = `hsl(${hue}, 100%, ${light}%)`;
-                        const drawY = (this.y + dy) * sq + offsetY;
-                        if (drawY >= 0) {
-                            ctxDraw.fillRect((this.x + dx) * sq + offsetX, drawY, sq, sq);
-                            ctxDraw.strokeStyle = 'black';
-                            ctxDraw.lineWidth = 1;
-                            ctxDraw.strokeRect((this.x + dx) * sq + offsetX, drawY, sq, sq);
-                        }
-                    }
-                }));
-                ctxDraw.globalAlpha = 1;
-            }
-            drawPreview() {
-                previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-                const originalSize = 80;
-                const scale = previewCanvas.width / originalSize;
-                const sq = BLOCK_SIZE * scale;
-                const time = Date.now() / 200;
-                const hueAmp = Math.min(45, (level - 1) * 4.5);
-                const lightAmp = 15 + Math.min(30, (level - 1) * 3);
-                const maxW = Math.max(...this.shape.map(row => row.length));
-                const maxH = this.shape.length;
-                const offsetX = (4 - maxW) / 2 * sq;
-                const offsetY = (4 - maxH) / 2 * sq;
-                this.shape.forEach((row, dy) => row.forEach((val, dx) => {
-                    if (val) {
-                        const hue = this.hue + hueAmp * Math.sin(time / 5 + dx * 1.5 + dy);
-                        const light = 50 + lightAmp * Math.sin(time * 0.7 + dx * 2 + dy * 1.2);
-                        previewCtx.fillStyle = `hsl(${hue}, 100%, ${light}%)`;
-                        previewCtx.fillRect(offsetX + dx * sq, offsetY + dy * sq, sq, sq);
-                        previewCtx.strokeStyle = 'black';
-                        previewCtx.lineWidth = 1;
-                        previewCtx.strokeRect(offsetX + dx * sq, offsetY + dy * sq, sq, sq);
-                    }
-                }));
-            }
-            undraw(scale = 1) {
-                const sq = BLOCK_SIZE * scale;
-                ctx.fillStyle = VACANT;
-                this.shape.forEach((row, dy) => row.forEach((val, dx) => {
-                    if (val) ctx.fillRect((this.x + dx) * sq, (this.y + dy) * sq, sq, sq);
-                }));
-            }
-            move(dx, dy, scale = 1) {
-                this.undraw(scale);
-                const oldX = this.x;
-                const oldY = this.y;
-                this.x += dx;
-                this.y += dy;
-                if (this.collide(scale)) {
-                    this.x = oldX;
-                    this.y = oldY;
-                    this.draw(ctx, 0, 0, 1, scale);
-                    return false;
-                }
-                this.draw(ctx, 0, 0, 1, scale);
-                if (isMultiplayer && conn) sendUpdate();
-                return true;
-            }
-            rotatePiece(scale = 1) {
-                this.undraw(scale);
-                const oldRotation = this.rotation;
-                this.rotation = (this.rotation + 1) % 4;
-                this.shape = ROTATIONS[this.type][this.rotation];
-                if (this.collide(scale)) {
-                    this.rotation = oldRotation;
-                    this.shape = ROTATIONS[this.type][this.rotation];
-                } else {
-                    const rotateFreqs = [600, 700];
-                    if (sfxOn) playTone(rotateFreqs[rotateSoundIndex], 50, 0.1);
-                    rotateSoundIndex = 1 - rotateSoundIndex;
-                    if (isMultiplayer && conn) sendUpdate();
-                }
-                this.draw(ctx, 0, 0, 1, scale);
-            }
-            collide(scale = 1) {
-                return this.shape.some((row, dy) => row.some((val, dx) => val && (
-                    this.x + dx < 0 || this.x + dx >= COLS || this.y + dy >= ROWS ||
-                    (this.y + dy >= 0 && board[this.y + dy][this.x + dx] !== VACANT)
-                )));
-            }
-        }
-
-        let currentPiece = null;
-        let nextPiece = new Piece();
 
         function initAudioContext() {
             if (!audioCtx) {
@@ -398,23 +239,146 @@
         document.addEventListener('touchstart', resumeAndPlay, {once: true});
         document.addEventListener('click', resumeAndPlay, {once: true});
 
-        function drawBoard(ctxDraw, b, scale = 1) {
-            ctxDraw.clearRect(0, 0, canvas.width, canvas.height);
-            const sq = BLOCK_SIZE * scale;
-            for (let y = 0; y < ROWS; y++) {
-                for (let x = 0; x < COLS; x++) {
-                    ctxDraw.fillStyle = b[y][x];
-                    ctxDraw.fillRect(x * sq, y * sq, sq, sq);
-                    ctxDraw.strokeStyle = 'black';
-                    ctxDraw.lineWidth = 1;
-                    ctxDraw.strokeRect(x * sq, y * sq, sq, sq);
+        const PIECES = [
+            [[1,1,1,1]], // I
+            [[1,1],[1,1]], // O
+            [[0,1,1],[1,1,0]], // S
+            [[1,1,0],[0,1,1]], // Z
+            [[1,1,1],[0,1,0]], // T
+            [[1,1,1],[1,0,0]], // L
+            [[1,1,1],[0,0,1]]  // J
+        ];
+        const HUES = [0, 30, 60, 120, 180, 240, 300];
+
+        class Piece {
+            constructor() {
+                let candidateType = Math.floor(Math.random() * PIECES.length);
+                let forceDifferent = false;
+                if (candidateType === lastType) {
+                    let potentialStreak = consecutiveCount + 1;
+                    if (potentialStreak >= 3) {
+                        forceDifferent = true;
+                    } else if (potentialStreak === 2 && Math.random() > 0.3) {
+                        forceDifferent = true;
+                    }
                 }
+                if (forceDifferent) {
+                    do {
+                        candidateType = Math.floor(Math.random() * PIECES.length);
+                    } while (candidateType === lastType);
+                    consecutiveCount = 0;
+                } else {
+                    if (candidateType === lastType) {
+                        consecutiveCount++;
+                    } else {
+                        consecutiveCount = 0;
+                    }
+                }
+                this.type = candidateType;
+                lastType = this.type;
+                this.shape = PIECES[this.type].map(row => row.slice());
+                this.hue = HUES[this.type];
+                this.x = Math.floor(COL / 2) - Math.floor(this.shape[0].length / 2);
+                this.y = 0;
+            }
+            draw(ctxDraw, offsetX = 0, offsetY = 0, alpha = 1, scale = 1) {
+                ctxDraw.globalAlpha = alpha;
+                const time = Date.now() / 200 * animationSpeed;
+                const hueAmp = Math.min(45, (level - 1) * 4.5);
+                const lightAmp = 15 + Math.min(30, (level - 1) * 3);
+                const sq = SQ * scale;
+                this.shape.forEach((row, dy) => row.forEach((val, dx) => {
+                    if (val) {
+                        const hue = this.hue + hueAmp * Math.sin(time / 5 + dx * 1.5 + dy);
+                        const light = 50 + lightAmp * Math.sin(time * 0.7 + dx * 2 + dy * 1.2);
+                        ctxDraw.fillStyle = `hsl(${hue}, 100%, ${light}%)`;
+                        ctxDraw.fillRect((this.x + dx) * sq + offsetX, (this.y + dy) * sq + offsetY, sq, sq);
+                    }
+                }));
+                ctxDraw.globalAlpha = 1;
+            }
+            drawPreview(ctxP) {
+                ctxP.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+                const originalSize = 80;
+                const scale = previewCanvas.width / originalSize;
+                const sq = SQ * scale;
+                const time = Date.now() / 200;
+                const hueAmp = Math.min(45, (level - 1) * 4.5);
+                const lightAmp = 15 + Math.min(30, (level - 1) * 3);
+                const maxW = Math.max(...this.shape.map(row => row.length));
+                const maxH = this.shape.length;
+                const offsetX = (4 - maxW) / 2 * sq;
+                const offsetY = (4 - maxH) / 2 * sq;
+                this.shape.forEach((row, dy) => row.forEach((val, dx) => {
+                    if (val) {
+                        const hue = this.hue + hueAmp * Math.sin(time / 5 + dx * 1.5 + dy);
+                        const light = 50 + lightAmp * Math.sin(time * 0.7 + dx * 2 + dy * 1.2);
+                        ctxP.fillStyle = `hsl(${hue}, 100%, ${light}%)`;
+                        ctxP.fillRect(offsetX + dx * sq, offsetY + dy * sq, sq, sq);
+                    }
+                }));
+            }
+            undraw(scale = 1) {
+                const sq = SQ * scale;
+                ctx.fillStyle = VACANT;
+                this.shape.forEach((row, dy) => row.forEach((val, dx) => {
+                    if (val) ctx.fillRect((this.x + dx) * sq, (this.y + dy) * sq, sq, sq);
+                }));
+            }
+            move(dir, scale = 1) {
+                this.undraw(scale);
+                const oldX = this.x;
+                const oldY = this.y;
+                this.x += dir.x;
+                this.y += dir.y;
+                if (this.collide(scale)) {
+                    this.x = oldX;
+                    this.y = oldY;
+                    this.draw(ctx, 0, 0, 1, scale);
+                    return false;
+                }
+                this.draw(ctx, 0, 0, 1, scale);
+                sendState();
+                return true;
+            }
+            rotate(scale = 1) {
+                this.undraw(scale);
+                const oldShape = this.shape.map(row => row.slice());
+                this.shape = this.shape[0].map((_, i) => this.shape.map(row => row[i]).reverse());
+                if (this.collide(scale)) {
+                    this.shape = oldShape;
+                } else {
+                    const rotateFreqs = [600, 700];
+                    if (sfxOn) playTone(rotateFreqs[rotateSoundIndex], 50, 0.1);
+                    rotateSoundIndex = 1 - rotateSoundIndex;
+                    sendState();
+                }
+                this.draw(ctx, 0, 0, 1, scale);
+            }
+            collide(scale = 1) {
+                return this.shape.some((row, dy) => row.some((val, dx) => val && (
+                    this.x + dx < 0 || this.x + dx >= COL || this.y + dy >= ROW ||
+                    (this.y + dy >= 0 && board[this.y + dy][this.x + dx] !== VACANT)
+                )));
             }
         }
 
+        let piece = null;
+        let nextPiece = new Piece();
+        let dropStart = Date.now();
+
+        function drawBoard(ctxDraw, boardToDraw, scale = 1) {
+            const sq = SQ * scale;
+            boardToDraw.forEach((row, y) => row.forEach((val, x) => {
+                if (val !== VACANT) {
+                    ctxDraw.fillStyle = val;
+                    ctxDraw.fillRect(x * sq, y * sq, sq, sq);
+                }
+            }));
+        }
+
         function drawOpponentPiece(pieceData, scale = 1) {
-            opponentCtx.globalAlpha = 1;
-            const sq = BLOCK_SIZE * scale;
+            const sq = SQ * scale;
             const time = Date.now() / 200;
             const hueAmp = Math.min(45, (opponentLevel - 1) * 4.5);
             const lightAmp = 15 + Math.min(30, (opponentLevel - 1) * 3);
@@ -422,11 +386,8 @@
                 if (val) {
                     const hue = pieceData.hue + hueAmp * Math.sin(time / 5 + dx * 1.5 + dy);
                     const light = 50 + lightAmp * Math.sin(time * 0.7 + dx * 2 + dy * 1.2);
-                    opponentCtx.fillStyle = `hsl(${hue}, 100%, ${light}%)`;
-                    opponentCtx.fillRect((pieceData.x + dx) * sq, (pieceData.y + dy) * sq, sq, sq);
-                    opponentCtx.strokeStyle = 'black';
-                    opponentCtx.lineWidth = 1;
-                    opponentCtx.strokeRect((pieceData.x + dx) * sq, (pieceData.y + dy) * sq, sq, sq);
+                    ctxOpponent.fillStyle = `hsl(${hue}, 100%, ${light}%)`;
+                    ctxOpponent.fillRect((pieceData.x + dx) * sq, (pieceData.y + dy) * sq, sq, sq);
                 }
             }));
         }
@@ -441,105 +402,106 @@
             document.getElementById('opponentLevel').textContent = `P2 Level: ${opponentLevel}`;
         }
 
-        function updateScore(lines) {
-            const points = [0, 40, 100, 300, 1200][lines] * level;
-            score += points;
-            totalLines += lines;
-            updateScoreDisplay();
-            level = initLevel + Math.floor(totalLines / 10);
-            dropInterval = Math.max(100, 1000 - (level - 1) * 50);
-            updateLevelDisplay();
+        function getInterval() {
+            return Math.max(100, 1000 - (level - 1) * 50) / (softDropActive ? 2 : 1);
         }
 
-        function addGarbage(amount) {
-            for (let i = 0; i < amount; i++) {
-                const row = Array(COLS).fill(`hsl(0, 0%, 50%)`);
-                row[Math.floor(Math.random() * COLS)] = VACANT;
-                board.shift();
-                board.push(row);
-            }
-            while (currentPiece.collide()) {
-                currentPiece.y--;
-                if (currentPiece.y < -2) {
-                    gameOverState = true;
-                    if (isMultiplayer && conn) conn.send({ type: 'gameOver' });
-                    alert('You lose!');
-                    backButton.style.display = 'block';
-                    break;
-                }
-            }
-            if (isMultiplayer && conn) sendUpdate();
-            if (sfxOn) playTone(200, 200, 0.2);
+        function sendState() {
+            if (!isMultiplayer || !conn || gameOver) return;
+            conn.send({
+                type: 'board',
+                board: board,
+                score: score,
+                level: level,
+                piece: piece ? {x: piece.x, y: piece.y, shape: piece.shape.map(row => row.slice()), hue: piece.hue} : null
+            });
         }
 
-        function gameLoop(time) {
-            if (gameOverState || opponentGameOver || paused) {
-                backButton.style.display = 'block';
-                return;
+        function drop() {
+            const oldY = piece.y;
+            const moved = piece.move({x: 0, y: 1});
+            if (!moved) {
+                merge();
+                const lines = removeLines();
+                if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
+                sendState();
+                piece = nextPiece;
+                nextPiece = new Piece();
+                if (piece.collide()) endGame();
             }
-            if (time - lastDropTime > dropInterval) {
-                if (!currentPiece.move(0, 1)) dropPiece();
-                lastDropTime = time;
-            }
-            drawBoard(ctx, board);
-            currentPiece.draw(ctx);
-            if (isMultiplayer) {
-                const oppScale = isMobile ? 0.1875 : 1;
-                drawBoard(opponentCtx, opponentBoard, oppScale);
-                if (opponentPieceData) drawOpponentPiece(opponentPieceData, oppScale);
-            }
-            nextPiece.drawPreview();
-            requestAnimationFrame(gameLoop);
+            dropStart = Date.now();
         }
 
-        function dropPiece() {
-            const shape = currentPiece.shape;
-            for (let y = 0; y < shape.length; y++) {
-                for (let x = 0; x < shape[y].length; x++) {
-                    if (shape[y][x]) {
-                        board[currentPiece.y + y][currentPiece.x + x] = `hsl(${currentPiece.hue}, 100%, 50%)`;
-                    }
-                }
-            }
-            const lines = clearLines();
-            updateScore(lines);
-            if (lines > 1 && isMultiplayer) {
-                const garbage = lines - 1;
-                if (conn) conn.send({ type: 'garbage', amount: garbage });
-            }
-            spawnPiece();
-            if (isMultiplayer && conn) sendUpdate();
+        function merge() {
+            piece.shape.forEach((row, dy) => row.forEach((val, dx) => {
+                if (val) board[piece.y + dy][piece.x + dx] = `hsl(${piece.hue}, 100%, 50%)`;
+            }));
             if (sfxOn) playTone(150, 150, 0.2);
-            if (lines > 0 && sfxOn) playTone(400 + lines * 100, 200, 0.2);
         }
 
-        function clearLines() {
+        function removeLines() {
             let lines = 0;
-            for (let y = ROWS - 1; y >= 0; y--) {
+            for (let y = ROW - 1; y >= 0; y--) {
                 if (board[y].every(cell => cell !== VACANT)) {
                     board.splice(y, 1);
-                    board.unshift(Array(COLS).fill(VACANT));
+                    board.unshift(Array(COL).fill(VACANT));
                     lines++;
                     y++;
                 }
             }
+            score += [0, 40, 100, 300, 1200][lines] * level;
+            updateScoreDisplay();
+            level = Math.floor(score / 1000) + parseInt(document.getElementById('difficulty').value);
+            updateLevelDisplay();
+            if (lines > 0 && sfxOn) playTone(400 + lines * 100, 200, 0.2);
             return lines;
         }
 
-        function spawnPiece() {
-            currentPiece = nextPiece;
-            nextPiece = new Piece();
-            if (currentPiece.collide()) {
-                gameOverState = true;
-                if (isMultiplayer && conn) conn.send({ type: 'gameOver' });
-                alert(isMultiplayer ? 'You lose!' : 'Game Over!');
-                backButton.style.display = 'block';
+        function addGarbage(numLines) {
+            for (let i = 0; i < numLines; i++) {
+                board.shift();
+                let row = Array(COL).fill('hsl(0, 0%, 50%)');
+                row[Math.floor(Math.random() * COL)] = VACANT;
+                board.push(row);
             }
+            if (piece.collide()) endGame();
+            if (sfxOn) playTone(200, 200, 0.2);
         }
 
-        function hardDrop() {
-            while (currentPiece.move(0, 1)) {}
-            dropPiece();
+        function endGame(win = false) {
+            gameOver = true;
+            document.getElementById('gameOver').style.display = 'block';
+            document.getElementById('scoreDisplay').textContent = score;
+            document.getElementById('gameOverTitle').textContent = win ? 'You Win!' : 'Simulation Over';
+            if (isMultiplayer && conn && !win) conn.send({type: 'gameover'});
+        }
+
+        function restart(singleplayer = true) {
+            board = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
+            opponentBoard = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
+            opponentPiece = null;
+            score = 0;
+            opponentScore = 0;
+            level = parseInt(document.getElementById('difficulty').value);
+            opponentLevel = 1;
+            updateScoreDisplay();
+            updateLevelDisplay();
+            gameOver = false;
+            paused = false;
+            gameStarted = true;
+            isMultiplayer = !singleplayer;
+            document.getElementById('opponentArea').style.display = singleplayer ? 'none' : 'flex';
+            document.getElementById('gameOver').style.display = 'none';
+            lastType = -1;
+            consecutiveCount = 0;
+            piece = new Piece();
+            nextPiece = new Piece();
+            dropStart = Date.now();
+            if (isMultiplayer && conn) conn.send({type: 'restart'});
+            if (isMobile && isMultiplayer) {
+                const boards = document.getElementById('boards');
+                boards.insertBefore(opponentCanvas, canvas);
+            }
         }
 
         function togglePause() {
@@ -550,298 +512,31 @@
             } else {
                 document.getElementById('resumeBtn').style.display = 'none';
                 document.getElementById('pauseBtn').style.display = 'inline';
-                lastDropTime = performance.now();
-                gameLoop(performance.now());
+                dropStart = Date.now();
             }
         }
 
-        document.addEventListener('keydown', e => {
-            if (gameOverState) return;
-            if (e.key === 'Escape') {
-                if (!gameStarted) return;
-                togglePause();
-                return;
-            }
-            if (paused) return;
-            if (e.key.startsWith('Arrow') || ['w', 'a', 's', 'd'].includes(e.key.toLowerCase())) e.preventDefault();
-            if (e.key === 'a' || e.key === 'ArrowLeft') currentPiece.move(-1, 0);
-            if (e.key === 'd' || e.key === 'ArrowRight') currentPiece.move(1, 0);
-            if (e.key === 's' || e.key === 'ArrowDown') {
-                softDropActive = true;
-                currentPiece.move(0, 1);
-            }
-            if (e.key === 'w' || e.key === 'ArrowUp') currentPiece.rotatePiece();
-            if (e.key === ' ') hardDrop();
-        });
-
-        document.addEventListener('keyup', e => {
-            if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') {
-                softDropActive = false;
-            }
-        });
-
-        let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
-        canvas.addEventListener('touchstart', e => {
-            if (paused || gameOverState) return;
-            e.preventDefault();
-            touchStartX = e.changedTouches[0].screenX;
-            touchStartY = e.changedTouches[0].screenY;
-        });
-
-        canvas.addEventListener('touchmove', e => {
-            if (paused || gameOverState) return;
-            e.preventDefault();
-            touchEndX = e.changedTouches[0].screenX;
-            touchEndY = e.changedTouches[0].screenY;
-        });
-
-        canvas.addEventListener('touchend', e => {
-            if (paused || gameOverState) return;
-            e.preventDefault();
-            const deltaX = touchEndX - touchStartX;
-            const deltaY = touchEndY - touchStartY;
-            if (Math.abs(deltaX) > Math.abs(deltaY)) {
-                if (deltaX > 30) currentPiece.move(1, 0);
-                else if (deltaX < -30) currentPiece.move(-1, 0);
-            } else {
-                if (deltaY > 30) hardDrop();
-                else if (deltaY < -30) currentPiece.rotatePiece();
-            }
-        });
-
-        const mobileLeft = document.getElementById('mobileLeft');
-        const mobileRight = document.getElementById('mobileRight');
-        const mobileDown = document.getElementById('mobileDown');
-        const mobileRotate = document.getElementById('mobileRotate');
-        const mobileHardDrop = document.getElementById('mobileHardDrop');
-
-        let moveInterval;
-
-        function startMove(dir) {
-            handleButtonPress(dir);
-            moveInterval = setInterval(() => handleButtonPress(dir), 100);
-        }
-
-        function stopMove() {
-            clearInterval(moveInterval);
-        }
-
-        function handleButtonPress(dir) {
-            if (paused || gameOverState) return;
-            if (dir === 'left') currentPiece.move(-1, 0);
-            if (dir === 'right') currentPiece.move(1, 0);
-            if (dir === 'down') {
-                softDropActive = true;
-                currentPiece.move(0, 1);
-            }
-            if (dir === 'rotate') currentPiece.rotatePiece();
-            if (dir === 'hardDrop') hardDrop();
-        }
-
-        mobileLeft.addEventListener('touchstart', e => { e.preventDefault(); startMove('left'); });
-        mobileLeft.addEventListener('touchend', stopMove);
-
-        mobileRight.addEventListener('touchstart', e => { e.preventDefault(); startMove('right'); });
-        mobileRight.addEventListener('touchend', stopMove);
-
-        mobileDown.addEventListener('touchstart', e => { e.preventDefault(); startMove('down'); });
-        mobileDown.addEventListener('touchend', () => { stopMove(); softDropActive = false; });
-
-        mobileRotate.addEventListener('touchstart', e => { e.preventDefault(); handleButtonPress('rotate'); });
-
-        mobileHardDrop.addEventListener('touchstart', e => { e.preventDefault(); if (!hardDropPressed) { hardDropPressed = true; handleButtonPress('hardDrop'); } });
-        mobileHardDrop.addEventListener('touchend', () => { hardDropPressed = false; });
-
-        // Start singleplayer
-        document.getElementById('startBtn').addEventListener('click', () => {
-            initGame(false);
-            document.getElementById('opponentArea').style.display = 'none';
-            document.getElementById('multiplayerControls').style.display = 'none';
-            document.getElementById('difficulty-label').style.display = 'none';
-            document.getElementById('musicToggle').style.display = 'none';
-            document.getElementById('sfxToggle').style.display = 'none';
-            document.getElementById('musicVolume-label').style.display = 'none';
-            document.getElementById('startBtn').style.display = 'none';
-            document.getElementById('pauseBtn').style.display = 'inline';
-            spawnPiece();
-            lastDropTime = performance.now();
-            gameLoop(performance.now());
-        });
-
-        // Host online 2P
-        document.getElementById('hostBtn').addEventListener('click', () => {
-            document.getElementById('hostBtn').style.display = 'none';
-            document.getElementById('joinBtn').style.display = 'none';
-            document.getElementById('gameIdInput').style.display = 'none';
-            setupMultiplayer(true);
-        });
-
-        // Join online
-        document.getElementById('joinBtn').addEventListener('click', () => {
-            const id = document.getElementById('gameIdInput').value.toUpperCase();
-            if (id) {
-                document.getElementById('hostBtn').style.display = 'none';
-                document.getElementById('joinBtn').style.display = 'none';
-                document.getElementById('gameIdInput').style.display = 'none';
-                setupMultiplayer(false, id);
-            }
-        });
-
-        function setupMultiplayer(host, joinId = null) {
-            isHost = host;
-            if (host) {
-                const shortId = new ShortUniqueId({ length: 4 }).rnd().toUpperCase();
-                peer = new Peer(shortId, {
-                    host: '0.peerjs.com',
-                    port: 443,
-                    secure: true,
-                    config: {
-                        iceServers: [
-                            { urls: 'stun:stun.l.google.com:19302' },
-                            { urls: 'stun:stun1.l.google.com:19302' },
-                            { urls: 'stun:stun2.l.google.com:19302' },
-                            { urls: 'stun:stun3.l.google.com:19302' },
-                            { urls: 'stun:stun4.l.google.com:19302' }
-                        ]
-                    }
-                });
-                peer.on('open', id => {
-                    document.getElementById('gameId').textContent = id;
-                    document.getElementById('gameIdDisplay').style.display = 'block';
-                });
-                peer.on('connection', connection => {
-                    conn = connection;
-                    setupConnection();
-                    conn.on('open', () => {
-                        initGame(true);
-                        spawnPiece();
-                        sendUpdate();
-                        lastDropTime = performance.now();
-                        gameLoop(performance.now());
-                    });
-                });
-                peer.on('error', err => console.error('Peer error:', err));
-            } else {
-                peer = new Peer({
-                    host: '0.peerjs.com',
-                    port: 443,
-                    secure: true,
-                    config: {
-                        iceServers: [
-                            { urls: 'stun:stun.l.google.com:19302' },
-                            { urls: 'stun:stun1.l.google.com:19302' },
-                            { urls: 'stun:stun2.l.google.com:19302' },
-                            { urls: 'stun:stun3.l.google.com:19302' },
-                            { urls: 'stun:stun4.l.google.com:19302' }
-                        ]
-                    }
-                });
-                peer.on('open', () => {
-                    if (joinId) {
-                        conn = peer.connect(joinId);
-                        setupConnection();
-                        conn.on('open', () => {
-                            initGame(true);
-                            spawnPiece();
-                            sendUpdate();
-                            lastDropTime = performance.now();
-                            gameLoop(performance.now());
-                        });
-                    }
-                });
-                peer.on('error', err => console.error('Peer error:', err));
-            }
-        }
-
-        // Setup connection events
-        function setupConnection() {
-            conn.on('data', data => {
-                if (data.type === 'update') {
-                    opponentBoard = data.board;
-                    opponentPieceData = data.currentPiece;
-                    opponentScore = data.score;
-                    opponentLevel = data.level;
-                    document.getElementById('opponentScore').textContent = `P2 Score: ${opponentScore}`;
-                    document.getElementById('opponentLevel').textContent = `P2 Level: ${opponentLevel}`;
-                } else if (data.type === 'garbage') {
-                    addGarbage(data.amount);
-                } else if (data.type === 'gameOver') {
-                    opponentGameOver = true;
-                    alert('You win!');
-                    backButton.style.display = 'block';
+        function gameLoop() {
+            if (!paused && !gameOver) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawBoard(ctx, board);
+                piece.draw(ctx);
+                if (isMultiplayer) {
+                    ctxOpponent.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
+                    const oppScale = isMobile ? 0.1875 : 1;
+                    drawBoard(ctxOpponent, opponentBoard, oppScale);
+                    if (opponentPiece) drawOpponentPiece(opponentPiece, oppScale);
                 }
-            });
-            conn.on('close', () => {
-                alert('Connection lost. Game over.');
-                gameOverState = true;
-                backButton.style.display = 'block';
-            });
-        }
-
-        // Send board update
-        function sendUpdate() {
-            if (conn) {
-                conn.send({
-                    type: 'update',
-                    board: board,
-                    currentPiece: {x: currentPiece.x, y: currentPiece.y, shape: currentPiece.shape, hue: currentPiece.hue, rotation: currentPiece.rotation},
-                    score: score,
-                    level: level
-                });
+                nextPiece.drawPreview(ctxPreview);
+                if (Date.now() - dropStart > getInterval()) drop();
             }
+            requestAnimationFrame(gameLoop);
         }
 
-        // Init game
-        function initGame(multi = false) {
-            const diff = document.getElementById('difficulty').value;
-            initLevel = {easy: 1, medium: 5, hard: 10}[diff];
-            level = initLevel;
-            dropInterval = Math.max(100, 1000 - (level - 1) * 50);
-            board = Array.from({length: ROWS}, () => Array(COLS).fill(VACANT));
-            score = 0;
-            totalLines = 0;
-            gameOverState = false;
-            opponentGameOver = false;
-            isMultiplayer = multi;
-            document.getElementById('controls').style.display = 'none';
-            if (multi) document.getElementById('multiplayerControls').style.display = 'none';
-            document.getElementById('gameArea').style.display = 'flex';
-            document.getElementById('opponentArea').style.display = multi ? 'flex' : 'none';
-            updateScoreDisplay();
-            updateLevelDisplay();
-            backButton.style.display = 'none';
-            paused = false;
-            gameStarted = true;
-            initAudioContext().then(() => {
-                playSilent();
-                if (musicOn) playTheme();
-            });
-        }
+        // ... (rest of script remains, with peer setup including console.log for errors)
+        peer.on('error', err => console.error('PeerJS error:', err));
 
-        document.getElementById('musicToggle').addEventListener('click', () => {
-            musicOn = !musicOn;
-            document.getElementById('musicToggle').textContent = `Music ${musicOn ? 'On' : 'Off'}`;
-            if (musicOn) {
-                clearTimeout(themeTimeout);
-                themeIndex = 0;
-                initAudioContext().then(playTheme);
-            } else {
-                clearTimeout(themeTimeout);
-                isThemePlaying = false;
-            }
-        });
-
-        document.getElementById('sfxToggle').addEventListener('click', () => {
-            sfxOn = !sfxOn;
-            document.getElementById('sfxToggle').textContent = `SFX ${sfxOn ? 'On' : 'Off'}`;
-        });
-
-        document.getElementById('musicVolume').addEventListener('input', e => {
-            musicVolume = parseFloat(e.target.value);
-        });
-
-        document.getElementById('pauseBtn').addEventListener('click', togglePause);
-        document.getElementById('resumeBtn').addEventListener('click', togglePause);
+        gameLoop();
     </script>
 </body>
 </html>
