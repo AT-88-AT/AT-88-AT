@@ -37,7 +37,7 @@
             #gameArea { flex-direction: column; align-items: center; justify-content: center; flex-wrap: nowrap; }
             #previewCanvas { margin: 10px 0 0 0; width: 48px; height: 48px; }
             #tetrisCanvas { width: 200px; height: 400px; }
-            #opponentCanvas { width: 37.5px; height: 75px; }
+            #opponentCanvas { width: 60px; height: 120px; }
             #score, #level { font-size: 16px; margin: 5px; width: auto; text-align: center; min-width: auto; }
             #mobileControls { display: block; }
             #musicVolume-label { display: none; }
@@ -65,8 +65,10 @@
         <p>Stack tetrominoes to fill rows and clear lines. In VS mode, clearing multiple lines sends garbage to opponent. Reach higher levels for faster drops and exotic animations.</p>
         <h3>Controls</h3>
         <ul>
-            <li>WASD and ARROW buttons for movement</li>
-            <li>Space for hard drop</li>
+            <li>Left/Right: A/D or Left/Right arrows (move)</li>
+            <li>Soft Drop: S or Down arrow</li>
+            <li>Rotate: W or Up arrow</li>
+            <li>Hard Drop: Space</li>
         </ul>
     </div>
     <div id="main">
@@ -159,13 +161,28 @@
         let peer = null;
         let conn = null;
         const isMobile = window.innerWidth <= 600;
-        const suid = new ShortUniqueId({ length: 6 });
+        const suid = new ShortUniqueId({ length: 4 });
+
+        const peerConfig = {
+            host: '0.peerjs.com',
+            port: 443,
+            secure: true,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' }
+                ]
+            }
+        };
 
         if (isMobile) {
             previewCanvas.width = 48;
             previewCanvas.height = 48;
-            opponentCanvas.width = 37.5;
-            opponentCanvas.height = 75;
+            opponentCanvas.width = 60;
+            opponentCanvas.height = 120;
         }
 
         function initAudioContext() {
@@ -224,12 +241,14 @@
             if (!musicOn || isThemePlaying) return;
             isThemePlaying = true;
             if (themeIndex >= music.length) themeIndex = 0;
-            playTone(music[themeIndex].note, music[themeIndex].dur, musicVolume);
+            const speedFactor = 1 + (level - 1) * 0.05;
+            const dur = music[themeIndex].dur / speedFactor;
+            playTone(music[themeIndex].note, dur, musicVolume);
             themeIndex++;
             themeTimeout = setTimeout(() => {
                 isThemePlaying = false;
                 playTheme();
-            }, music[themeIndex - 1].dur);
+            }, dur);
         }
 
         const resumeAndPlay = () => initAudioContext().then(() => {
@@ -471,13 +490,26 @@
         }
 
         function addGarbage(numLines) {
-            for (let i = 0; i < numLines; i++) {
-                board.shift();
-                let row = Array(COL).fill('hsl(0, 0%, 50%)');
-                row[Math.floor(Math.random() * COL)] = VACANT;
-                board.push(row);
+            if (numLines > 0) {
+                let willTopOut = false;
+                for (let i = 0; i < numLines; i++) {
+                    if (board[i].some(cell => cell !== VACANT)) {
+                        willTopOut = true;
+                        break;
+                    }
+                }
+                if (willTopOut) {
+                    endGame();
+                    return;
+                }
+                for (let i = 0; i < numLines; i++) {
+                    board.shift();
+                    let row = Array(COL).fill('hsl(0, 0%, 50%)');
+                    row[Math.floor(Math.random() * COL)] = VACANT;
+                    board.push(row);
+                }
             }
-            if (piece.collide()) endGame();
+            if (piece && piece.collide()) endGame();
             if (sfxOn) playTone(200, 200, 0.2);
         }
 
@@ -564,11 +596,24 @@
                 }
                 if (isMultiplayer) {
                     ctxOpponent.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
-                    const oppScale = isMobile ? 0.1875 : 1;
+                    const oppScale = isMobile ? 0.3 : 1;
                     drawBoard(ctxOpponent, opponentBoard, oppScale);
                     if (opponentPiece) drawOpponentPiece(opponentPiece, oppScale);
                 }
                 nextPiece.drawPreview(ctxPreview);
+            } else {
+                if (gameStarted) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    drawBoard(ctx, board);
+                    if (piece) piece.draw(ctx);
+                    if (isMultiplayer) {
+                        ctxOpponent.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
+                        const oppScale = isMobile ? 0.3 : 1;
+                        drawBoard(ctxOpponent, opponentBoard, oppScale);
+                        if (opponentPiece) drawOpponentPiece(opponentPiece, oppScale);
+                    }
+                    nextPiece.drawPreview(ctxPreview);
+                }
             }
             requestAnimationFrame(gameLoop);
         }
@@ -729,9 +774,10 @@
         }
 
         document.getElementById('hostBtn').addEventListener('click', () => {
-            const gameId = suid();
-            peer = new Peer(gameId, {debug: 3});
+            const gameId = suid().toUpperCase();
+            peer = new Peer(gameId, peerConfig);
             peer.on('open', id => {
+                console.log('Hosted with ID:', id);
                 document.getElementById('gameId').textContent = id;
                 document.getElementById('gameIdDisplay').style.display = 'block';
                 isHost = true;
@@ -745,13 +791,27 @@
                     sendState();
                 });
                 conn.on('data', receiveData);
+                conn.on('close', () => {
+                    alert('Opponent disconnected. You win!');
+                    endGame(true);
+                });
             });
-            peer.on('error', err => console.error('PeerJS error:', err));
+            peer.on('error', err => {
+                console.error('PeerJS error:', err);
+                if (err.type === 'unavailable-id') {
+                    alert('Game ID unavailable. Trying a new one...');
+                    peer.destroy();
+                    const newGameId = suid().toUpperCase();
+                    peer = new Peer(newGameId, peerConfig);
+                } else {
+                    alert('Multiplayer error: ' + err.message);
+                }
+            });
         });
 
         document.getElementById('joinBtn').addEventListener('click', () => {
-            const gameId = document.getElementById('gameIdInput').value;
-            peer = new Peer(null, {debug: 3});
+            const gameId = document.getElementById('gameIdInput').value.toUpperCase();
+            peer = new Peer(peerConfig);
             peer.on('open', id => {
                 conn = peer.connect(gameId);
                 conn.on('open', () => {
@@ -760,8 +820,19 @@
                     restart(false);
                 });
                 conn.on('data', receiveData);
+                conn.on('close', () => {
+                    alert('Host disconnected. You win!');
+                    endGame(true);
+                });
             });
-            peer.on('error', err => console.error('PeerJS error:', err));
+            peer.on('error', err => {
+                console.error('PeerJS error:', err);
+                if (err.type === 'peer-unavailable') {
+                    alert('Game ID not found or host unavailable.');
+                } else {
+                    alert('Multiplayer error: ' + err.message);
+                }
+            });
         });
 
         gameLoop();
