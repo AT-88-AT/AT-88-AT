@@ -73,7 +73,7 @@
                     <option value="10">Hard</option>
                 </select>
             </label>
-            <button id="musicToggle">Music On</button>
+            <button id="musicToggle">Music Off</button>
             <button id="sfxToggle">SFX On</button>
             <button id="startBtn">Start Singleplayer</button>
             <button id="pauseBtn" style="display:none;">Pause</button>
@@ -140,7 +140,7 @@
         let isHost = false;
         let rotateSoundIndex = 0;
         let softDropActive = false;
-        let musicOn = true;
+        let musicOn = false;
         let sfxOn = true;
         let musicVolume = 0.1;
         let lastHorizontalDir = 0;
@@ -185,17 +185,20 @@
             return audioCtx.resume();
         }
 
-        function playTone(freq, duration, volume) {
+        function playTone(freq, duration, volume = 0.1) {
             initAudioContext().then(() => {
                 const oscillator = audioCtx.createOscillator();
                 const gainNode = audioCtx.createGain();
                 oscillator.type = 'sine';
                 oscillator.frequency.value = freq;
-                gainNode.gain.value = volume;
+                gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration / 1000);
                 oscillator.connect(gainNode);
                 gainNode.connect(audioCtx.destination);
                 oscillator.start();
-                setTimeout(() => oscillator.stop(), duration);
+                setTimeout(() => {
+                    oscillator.stop();
+                }, duration + 50);
             });
         }
 
@@ -205,11 +208,12 @@
                 const gainNode = audioCtx.createGain();
                 oscillator.type = 'sine';
                 oscillator.frequency.value = 440;
-                gainNode.gain.value = 0;
+                gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.001);
                 oscillator.connect(gainNode);
                 gainNode.connect(audioCtx.destination);
                 oscillator.start();
-                setTimeout(() => oscillator.stop(), 1);
+                setTimeout(() => oscillator.stop(), 50);
             });
         }
 
@@ -434,7 +438,7 @@
                 sendState();
                 piece = nextPiece;
                 nextPiece = new Piece();
-                sendState(); // Added: Send new piece state immediately after spawn
+                sendState();
                 if (piece.collide()) endGame();
             }
             dropStart = Date.now();
@@ -593,7 +597,7 @@
                     sendState();
                     piece = nextPiece;
                     nextPiece = new Piece();
-                    sendState(); // Added: Send new piece state immediately after spawn
+                    sendState();
                     if (piece.collide()) endGame();
                     dropStart = Date.now();
                 } else {
