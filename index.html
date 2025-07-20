@@ -159,7 +159,9 @@
         const peerConfig = {
             host: '0.peerjs.com',
             port: 443,
+            path: '/',  // Added for broker compatibility
             secure: true,
+            debug: 3,  // Enable debug logging for ICE issues (view in console)
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
@@ -167,9 +169,15 @@
                     { urls: 'stun:stun2.l.google.com:19302' },
                     { urls: 'stun:stun3.l.google.com:19302' },
                     { urls: 'stun:stun4.l.google.com:19302' },
+                    { urls: 'stun:stun.stunprotocol.org:3478' },  // Added reliable STUN
+                    { urls: 'stun:stun.sipnet.net:3478' },  // Added
                     { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-                    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
-                ]
+                    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                    { urls: 'turn:turn.anyfirewall.com:443?transport=tcp', username: 'webrtc', credential: 'webrtc' },  // Added backup TURN
+                    { urls: 'turn:numb.viagenie.ca', username: 'free', credential: 'muazkh' }  // Added free TURN (credentials public, may expire)
+                ],
+                iceTransportPolicy: 'all',  // Allow relay if direct fails
+                iceCandidatePoolSize: 10  // Increase candidates for better traversal
             }
         };
 
@@ -655,24 +663,24 @@
                     conn.on('open', onConnectionOpen);
                 });
                 peer.on('error', err => {
-                    console.error('PeerJS error:', err);
-                    alert('Multiplayer error: ' + err.message);
+                    console.error('PeerJS error:', err.type, err);
+                    alert('Multiplayer error: ' + err.type + '. Check network/firewall or try different devices. Details in console.');
                 });
             } else {
                 peer = new Peer(peerConfig);
                 peer.on('open', id => {
-                    console.log('Joiner peer open');
+                    console.log('Joiner peer open with ID:', id);
                     if (joinId) joinMultiplayer(joinId);
                 });
                 peer.on('error', err => {
-                    console.error('PeerJS error:', err);
-                    alert('Multiplayer error: ' + err.message);
+                    console.error('PeerJS error:', err.type, err);
+                    alert('Multiplayer error: ' + err.type + '. Check network/firewall or try different devices. Details in console.');
                 });
             }
         }
 
         function joinMultiplayer(id) {
-            conn = peer.connect(id);
+            conn = peer.connect(id, { reliable: true });  // Added reliable for better data transfer
             setupConnection();
             conn.on('open', onConnectionOpen);
         }
@@ -682,6 +690,10 @@
             conn.on('close', () => {
                 alert('Opponent disconnected. You win!');
                 endGame(true);
+            });
+            conn.on('error', err => {
+                console.error('Connection error:', err);
+                alert('Connection failed. Check console for details.');
             });
         }
 
