@@ -36,7 +36,7 @@
             #controls { order: 0; text-align: center; display: flex; flex-direction: column; align-items: center; }
             #gameArea { flex-direction: column; align-items: center; justify-content: center; flex-wrap: nowrap; }
             #previewCanvas { margin: 10px 0 0 0; }
-            #score, #level { font-size: 16px; margin: 5px; width: auto; text-align: center; min-width: auto; }
+            #score, #level { font-size: 12.8px; margin: 5px; width: auto; text-align: center; min-width: auto; }
             #mobileControls { display: block; }
             #musicVolume-label { display: none; }
             #startBtn { order: 3; align-self: center; }
@@ -89,7 +89,7 @@
             <button id="hostBtn">Host VS Game</button>
             <input id="gameIdInput" placeholder="Enter Game ID to Join">
             <button id="joinBtn">Join VS Game</button>
-            <div id="gameIdDisplay" style="display:none;">Your Game ID: <span id="gameId"></span></div>
+            <div id="gameIdDisplay" style="display:none;">Your Game ID: <span id="gameId"></span> <button id="copyIdBtn">Copy ID</button></div>
         </div>
         <div id="gameArea">
             <div id="boards">
@@ -130,7 +130,7 @@
         const ctxPreview = previewCanvas.getContext('2d');
         const ROW = 20, COL = 10, VACANT = '#111';
         const isMobile = window.innerWidth <= 600;
-        const SQ = isMobile ? 18 : 30;
+        let SQ = isMobile ? 20.88 : 30; // 18 * 1.16 = 20.88 for 16% bigger on mobile
         let board = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
         let opponentBoard = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
         let opponentPiece = null;
@@ -179,10 +179,10 @@
 
         canvas.width = COL * SQ;
         canvas.height = ROW * SQ;
-        opponentCanvas.width = isMobile ? 68 : COL * SQ;
-        opponentCanvas.height = isMobile ? 135 : ROW * SQ;
-        previewCanvas.width = isMobile ? 54 : 120;
-        previewCanvas.height = isMobile ? 54 : 120;
+        opponentCanvas.width = isMobile ? 78.88 : COL * SQ; // Scaled up 16% for mobile opponent too
+        opponentCanvas.height = isMobile ? 157.76 : ROW * SQ;
+        previewCanvas.width = isMobile ? 43.2 : 120; // 54 * 0.8 = 43.2 for 20% smaller
+        previewCanvas.height = isMobile ? 43.2 : 120;
 
         function initAudioContext() {
             if (!audioCtx) {
@@ -556,7 +556,7 @@
             }
         }
 
-        function togglePause() {
+        function togglePause(sendToPeer = true) {
             paused = !paused;
             if (paused) {
                 document.getElementById('pauseBtn').style.display = 'none';
@@ -566,58 +566,62 @@
                 document.getElementById('pauseBtn').style.display = 'inline-block';
                 dropStart = Date.now();
             }
+            if (isMultiplayer && conn && sendToPeer) {
+                conn.send({type: paused ? 'pause' : 'resume'});
+            }
         }
 
         function gameLoop() {
-            if (gameStarted && !paused && !gameOver && piece) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                drawBoard(ctx, board);
-                if (hardDropping) {
-                    const elapsed = Date.now() - hardDropStart;
-                    const progress = Math.min(1, elapsed / hardDropAnimTime);
-                    if (progress >= 1) {
-                        hardDropping = false;
-                        piece.y += hardDropDist;
-                        merge();
-                        const lines = removeLines();
-                        if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
-                        sendState();
-                        piece = nextPiece;
-                        nextPiece = new Piece();
-                        if (piece.collide()) endGame();
-                        dropStart = Date.now();
-                    } else {
-                        const offset = progress * hardDropDist * SQ;
-                        piece.draw(ctx, 0, offset - 7, 0.5);
-                        piece.draw(ctx, 0, offset);
-                    }
-                } else {
-                    if (Date.now() - dropStart > getInterval()) drop();
-                    if (softDropActive) piece.draw(ctx, 0, -5, 0.5);
-                    if (lastHorizontalDir !== 0) piece.draw(ctx, lastHorizontalDir * -3, 0, 0.5);
-                    piece.draw(ctx);
-                }
-                if (isMultiplayer) {
-                    ctxOpponent.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
-                    const oppScale = isMobile ? 68 / (COL * SQ) : 1;
-                    drawBoard(ctxOpponent, opponentBoard, oppScale);
-                    if (opponentPiece) drawOpponentPiece(opponentPiece, oppScale);
-                }
-                nextPiece.drawPreview(ctxPreview);
-            } else {
+            if (!gameStarted || paused || gameOver) {
                 if (gameStarted) {
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     drawBoard(ctx, board);
                     if (piece) piece.draw(ctx);
                     if (isMultiplayer) {
                         ctxOpponent.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
-                        const oppScale = isMobile ? 68 / (COL * SQ) : 1;
+                        const oppScale = isMobile ? 78.88 / (COL * SQ) : 1;
                         drawBoard(ctxOpponent, opponentBoard, oppScale);
                         if (opponentPiece) drawOpponentPiece(opponentPiece, oppScale);
                     }
                     nextPiece.drawPreview(ctxPreview);
                 }
+                requestAnimationFrame(gameLoop);
+                return;
             }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBoard(ctx, board);
+            if (hardDropping) {
+                const elapsed = Date.now() - hardDropStart;
+                const progress = Math.min(1, elapsed / hardDropAnimTime);
+                if (progress >= 1) {
+                    hardDropping = false;
+                    piece.y += hardDropDist;
+                    merge();
+                    const lines = removeLines();
+                    if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
+                    sendState();
+                    piece = nextPiece;
+                    nextPiece = new Piece();
+                    if (piece.collide()) endGame();
+                    dropStart = Date.now();
+                } else {
+                    const offset = progress * hardDropDist * SQ;
+                    piece.draw(ctx, 0, offset - 7, 0.5);
+                    piece.draw(ctx, 0, offset);
+                }
+            } else {
+                if (Date.now() - dropStart > getInterval()) drop();
+                if (softDropActive) piece.draw(ctx, 0, -5, 0.5);
+                if (lastHorizontalDir !== 0) piece.draw(ctx, lastHorizontalDir * -3, 0, 0.5);
+                piece.draw(ctx);
+            }
+            if (isMultiplayer) {
+                ctxOpponent.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
+                const oppScale = isMobile ? 78.88 / (COL * SQ) : 1;
+                drawBoard(ctxOpponent, opponentBoard, oppScale);
+                if (opponentPiece) drawOpponentPiece(opponentPiece, oppScale);
+            }
+            nextPiece.drawPreview(ctxPreview);
             requestAnimationFrame(gameLoop);
         }
 
@@ -635,6 +639,10 @@
                 endGame(true);
             } else if (data.type === 'restart') {
                 restart(false, true);
+            } else if (data.type === 'pause') {
+                togglePause(false);
+            } else if (data.type === 'resume') {
+                togglePause(false);
             }
         }
 
@@ -838,6 +846,15 @@
         document.getElementById('joinBtn').addEventListener('click', () => {
             const gameId = document.getElementById('gameIdInput').value;
             setupMultiplayer(false, gameId);
+        });
+
+        document.getElementById('copyIdBtn').addEventListener('click', () => {
+            const gameId = document.getElementById('gameId').textContent;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(gameId).then(() => alert('Game ID copied!'));
+            } else {
+                alert('Copy manually: ' + gameId);
+            }
         });
 
         gameLoop();
