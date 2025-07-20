@@ -433,25 +433,15 @@
             dropStart = Date.now();
         }
 
-        function hardDropPiece() {
+        function initiateHardDrop() {
+            if (hardDropping || !piece) return;
             if (sfxOn) playTone(100, 200, 0.2);
-            piece.undraw();
-            while (true) {
-                piece.y++;
-                if (piece.collide()) {
-                    piece.y--;
-                    break;
-                }
-            }
-            piece.draw(ctx);
-            merge();
-            const lines = removeLines();
-            if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
-            sendState();
-            piece = nextPiece;
-            nextPiece = new Piece();
-            if (piece.collide()) endGame();
-            dropStart = Date.now();
+            const originalY = piece.y;
+            while (piece.move({x: 0, y: 1})) {}
+            hardDropDist = piece.y - originalY;
+            piece.y = originalY; // Reset to start position for animation
+            hardDropping = true;
+            hardDropStart = Date.now();
         }
 
         function merge() {
@@ -546,7 +536,28 @@
             if (gameStarted && !paused && !gameOver && piece) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 drawBoard(ctx, board);
-                piece.draw(ctx);
+                let offsetY = 0;
+                if (hardDropping) {
+                    const timePassed = Date.now() - hardDropStart;
+                    if (timePassed >= hardDropAnimTime) {
+                        hardDropping = false;
+                        piece.y += hardDropDist;
+                        merge();
+                        const lines = removeLines();
+                        if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
+                        sendState();
+                        piece = nextPiece;
+                        nextPiece = new Piece();
+                        if (piece.collide()) endGame();
+                        dropStart = Date.now();
+                    } else {
+                        const fraction = timePassed / hardDropAnimTime;
+                        offsetY = fraction * hardDropDist * SQ;
+                    }
+                } else {
+                    if (Date.now() - dropStart > getInterval()) drop();
+                }
+                piece.draw(ctx, 0, offsetY);
                 if (isMultiplayer) {
                     ctxOpponent.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
                     const oppScale = isMobile ? 0.1875 : 1;
@@ -554,7 +565,6 @@
                     if (opponentPiece) drawOpponentPiece(opponentPiece, oppScale);
                 }
                 nextPiece.drawPreview(ctxPreview);
-                if (Date.now() - dropStart > getInterval()) drop();
             }
             requestAnimationFrame(gameLoop);
         }
@@ -605,7 +615,7 @@
             if (key === 'd' || key === 'arrowright') piece.move({x: 1, y: 0});
             if (key === 's' || key === 'arrowdown') softDropActive = true;
             if (key === 'w' || key === 'arrowup') piece.rotate();
-            if (key === ' ') hardDropPiece();
+            if (key === ' ') initiateHardDrop();
         });
 
         document.addEventListener('keyup', e => {
@@ -628,7 +638,7 @@
             });
             document.getElementById('mobileHardDrop').addEventListener('touchstart', e => {
                 e.preventDefault();
-                if (!paused && !gameOver && gameStarted && piece) hardDropPiece();
+                if (!paused && !gameOver && gameStarted && piece) initiateHardDrop();
             });
             const mobileDown = document.getElementById('mobileDown');
             mobileDown.addEventListener('touchstart', e => {
@@ -643,7 +653,7 @@
 
         document.getElementById('hostBtn').addEventListener('click', () => {
             const gameId = suid();
-            peer = new Peer(gameId);
+            peer = new Peer(gameId, {debug: 3});
             peer.on('open', id => {
                 document.getElementById('gameId').textContent = id;
                 document.getElementById('gameIdDisplay').style.display = 'block';
@@ -664,7 +674,7 @@
 
         document.getElementById('joinBtn').addEventListener('click', () => {
             const gameId = document.getElementById('gameIdInput').value;
-            peer = new Peer();
+            peer = new Peer(null, {debug: 3});
             peer.on('open', id => {
                 conn = peer.connect(gameId);
                 conn.on('open', () => {
