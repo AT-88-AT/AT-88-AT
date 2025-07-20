@@ -74,7 +74,7 @@
     </div>
     <div id="main">
         <div id="controls">
-            <label>Difficulty:
+            <label id="difficulty-label">Difficulty:
                 <select id="difficulty">
                     <option value="easy">Easy</option>
                     <option value="medium" selected>Medium</option>
@@ -145,18 +145,12 @@
         let paused = true;
         let gameStarted = false;
         let isHost = false;
-        let baseInterval = 500;
         let rotateSoundIndex = 0;
         let softDropActive = false;
         let musicOn = true;
         let sfxOn = true;
         let musicVolume = 0.1;
-        let lastHorizontalDir = 0;
         let animationSpeed = 1;
-        let hardDropping = false;
-        let hardDropStart = 0;
-        let hardDropDist = 0;
-        let hardDropAnimTime = 500;
         let hardDropPressed = false;
         let audioCtx = null;
         let lastType = -1;
@@ -331,7 +325,6 @@
 
         let currentPiece = null;
         let nextPiece = new Piece();
-        let dropStart = Date.now();
 
         function initAudioContext() {
             if (!audioCtx) {
@@ -489,6 +482,7 @@
                 lastDropTime = time;
             }
             drawBoard(ctx, board);
+            currentPiece.draw(ctx);
             if (isMultiplayer) {
                 const oppScale = isMobile ? 0.1875 : 1;
                 drawBoard(opponentCtx, opponentBoard, oppScale);
@@ -570,14 +564,8 @@
             }
             if (paused) return;
             if (e.key.startsWith('Arrow') || ['w', 'a', 's', 'd'].includes(e.key.toLowerCase())) e.preventDefault();
-            if (e.key === 'a' || e.key === 'ArrowLeft') {
-                lastHorizontalDir = -1;
-                currentPiece.move(-1, 0);
-            }
-            if (e.key === 'd' || e.key === 'ArrowRight') {
-                lastHorizontalDir = 1;
-                currentPiece.move(1, 0);
-            }
+            if (e.key === 'a' || e.key === 'ArrowLeft') currentPiece.move(-1, 0);
+            if (e.key === 'd' || e.key === 'ArrowRight') currentPiece.move(1, 0);
             if (e.key === 's' || e.key === 'ArrowDown') {
                 softDropActive = true;
                 currentPiece.move(0, 1);
@@ -640,14 +628,8 @@
 
         function handleButtonPress(dir) {
             if (paused || gameOverState) return;
-            if (dir === 'left') {
-                lastHorizontalDir = -1;
-                currentPiece.move(-1, 0);
-            }
-            if (dir === 'right') {
-                lastHorizontalDir = 1;
-                currentPiece.move(1, 0);
-            }
+            if (dir === 'left') currentPiece.move(-1, 0);
+            if (dir === 'right') currentPiece.move(1, 0);
             if (dir === 'down') {
                 softDropActive = true;
                 currentPiece.move(0, 1);
@@ -674,6 +656,11 @@
         document.getElementById('startBtn').addEventListener('click', () => {
             initGame(false);
             document.getElementById('opponentArea').style.display = 'none';
+            document.getElementById('multiplayerControls').style.display = 'none';
+            document.getElementById('difficulty-label').style.display = 'none';
+            document.getElementById('musicToggle').style.display = 'none';
+            document.getElementById('sfxToggle').style.display = 'none';
+            document.getElementById('musicVolume-label').style.display = 'none';
             document.getElementById('startBtn').style.display = 'none';
             document.getElementById('pauseBtn').style.display = 'inline';
             spawnPiece();
@@ -817,7 +804,7 @@
             opponentGameOver = false;
             isMultiplayer = multi;
             document.getElementById('controls').style.display = 'none';
-            document.getElementById('multiplayerControls').style.display = 'none';
+            if (multi) document.getElementById('multiplayerControls').style.display = 'none';
             document.getElementById('gameArea').style.display = 'flex';
             document.getElementById('opponentArea').style.display = multi ? 'flex' : 'none';
             updateScoreDisplay();
