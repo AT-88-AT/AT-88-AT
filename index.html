@@ -180,12 +180,10 @@
                     { urls: 'turns:staticauth.openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayprojectsecret' },
                     { urls: 'turn:turn.anyfirewall.com:443?transport=tcp', username: 'webrtc', credential: 'webrtc' },
                     { urls: 'turn:relay1.expressturn.com:3478', username: 'efI4V8R4T7MDY7L9', credential: '2x6n9j5d' },
-                    { urls: 'turns:relay1.expressturn.com:5349', username: 'efI4V8R4T7MDY7L9', credential: '2x6n9j5d' },
-                    { urls: 'turn:freeturn.net:3478', username: 'free', credential: 'free' },
-                    { urls: 'turns:freeturn.tel:5349?transport=tcp', username: 'free', credential: 'free' }
+                    { urls: 'turns:relay1.expressturn.com:5349', username: 'efI4V8R4T7MDY7L9', credential: '2x6n9j5d' }
                 ],
                 iceTransportPolicy: 'all',
-                iceCandidatePoolSize: 16,
+                iceCandidatePoolSize: 14,
                 sdpSemantics: 'unified-plan',
                 bundlePolicy: 'max-bundle',
                 rtcpMuxPolicy: 'require'
@@ -802,6 +800,7 @@
         });
 
         const musicBtn = document.getElementById('musicToggle');
+        musicBtn.textContent = 'Music Off';
         musicBtn.addEventListener('click', () => {
             musicOn = !musicOn;
             musicBtn.textContent = musicOn ? 'Music On' : 'Music Off';
