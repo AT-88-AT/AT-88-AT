@@ -35,9 +35,7 @@
             #sidebar ul { padding-left: 0; }
             #controls { order: 0; text-align: center; display: flex; flex-direction: column; align-items: center; }
             #gameArea { flex-direction: column; align-items: center; justify-content: center; flex-wrap: nowrap; }
-            #previewCanvas { margin: 10px 0 0 0; width: 72px; height: 72px; }
-            #tetrisCanvas { width: 240px; height: 480px; }
-            #opponentCanvas { width: 90px; height: 180px; }
+            #previewCanvas { margin: 10px 0 0 0; }
             #score, #level { font-size: 16px; margin: 5px; width: auto; text-align: center; min-width: auto; }
             #mobileControls { display: block; }
             #musicVolume-label { display: none; }
@@ -129,7 +127,9 @@
         const ctxOpponent = opponentCanvas.getContext('2d');
         const previewCanvas = document.getElementById('previewCanvas');
         const ctxPreview = previewCanvas.getContext('2d');
-        const ROW = 20, COL = 10, SQ = 30, VACANT = '#111';
+        const ROW = 20, COL = 10, VACANT = '#111';
+        const isMobile = window.innerWidth <= 600;
+        const SQ = isMobile ? 24 : 30;
         let board = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
         let opponentBoard = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
         let opponentPiece = null;
@@ -159,7 +159,6 @@
         let consecutiveCount = 0;
         let peer = null;
         let conn = null;
-        const isMobile = window.innerWidth <= 600;
         let moveInterval;
 
         const peerConfig = {
@@ -177,12 +176,12 @@
             }
         };
 
-        if (isMobile) {
-            previewCanvas.width = 72;
-            previewCanvas.height = 72;
-            opponentCanvas.width = 90;
-            opponentCanvas.height = 180;
-        }
+        canvas.width = COL * SQ;
+        canvas.height = ROW * SQ;
+        opponentCanvas.width = isMobile ? 90 : COL * SQ;
+        opponentCanvas.height = isMobile ? 180 : ROW * SQ;
+        previewCanvas.width = isMobile ? 72 : 120;
+        previewCanvas.height = isMobile ? 72 : 120;
 
         function initAudioContext() {
             if (!audioCtx) {
@@ -321,21 +320,15 @@
             }
             drawPreview(ctxP) {
                 ctxP.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-                const originalSize = 120;
-                const scale = previewCanvas.width / originalSize;
-                const sq = SQ * scale;
-                const time = Date.now() / 200;
-                const hueAmp = Math.min(45, (level - 1) * 4.5);
-                const lightAmp = 15 + Math.min(30, (level - 1) * 3);
+                const previewSquares = 4;
+                const sq = previewCanvas.width / previewSquares;
                 const maxW = Math.max(...this.shape.map(row => row.length));
                 const maxH = this.shape.length;
-                const offsetX = (4 - maxW) / 2 * sq;
-                const offsetY = (4 - maxH) / 2 * sq;
+                const offsetX = (previewSquares - maxW) / 2 * sq;
+                const offsetY = (previewSquares - maxH) / 2 * sq;
                 this.shape.forEach((row, dy) => row.forEach((val, dx) => {
                     if (val) {
-                        const hue = this.hue + hueAmp * Math.sin(time / 5 + dx * 1.5 + dy);
-                        const light = 50 + lightAmp * Math.sin(time * 0.7 + dx * 2 + dy * 1.2);
-                        ctxP.fillStyle = `hsl(${hue}, 100%, ${light}%)`;
+                        ctxP.fillStyle = `hsl(${this.hue}, 100%, 50%)`;
                         ctxP.fillRect(offsetX + dx * sq, offsetY + dy * sq, sq, sq);
                         ctxP.strokeStyle = 'black';
                         ctxP.lineWidth = 1;
@@ -449,7 +442,6 @@
         }
 
         function drop() {
-            const oldY = piece.y;
             const moved = piece.move({x: 0, y: 1});
             if (!moved) {
                 merge();
@@ -530,7 +522,7 @@
             nextPiece.drawPreview(ctxPreview);
         }
 
-        function restart(singleplayer = true) {
+        function restart(singleplayer = true, fromRemote = false) {
             board = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
             opponentBoard = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
             opponentPiece = null;
@@ -553,12 +545,15 @@
             piece = new Piece();
             nextPiece = new Piece();
             dropStart = Date.now();
-            if (isMultiplayer && conn) conn.send({type: 'restart'});
+            drawInitial();
+            if (isMultiplayer && conn) {
+                if (!fromRemote) conn.send({type: 'restart'});
+                sendState();
+            }
             if (isMobile && isMultiplayer) {
                 const boards = document.getElementById('boards');
                 boards.insertBefore(opponentCanvas, canvas);
             }
-            drawInitial();  // Ensure immediate draw
         }
 
         function togglePause() {
@@ -604,7 +599,7 @@
                 }
                 if (isMultiplayer) {
                     ctxOpponent.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
-                    const oppScale = isMobile ? 0.3 : 1;
+                    const oppScale = isMobile ? 90 / (COL * SQ) : 1;
                     drawBoard(ctxOpponent, opponentBoard, oppScale);
                     if (opponentPiece) drawOpponentPiece(opponentPiece, oppScale);
                 }
@@ -616,7 +611,7 @@
                     if (piece) piece.draw(ctx);
                     if (isMultiplayer) {
                         ctxOpponent.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
-                        const oppScale = isMobile ? 0.3 : 1;
+                        const oppScale = isMobile ? 90 / (COL * SQ) : 1;
                         drawBoard(ctxOpponent, opponentBoard, oppScale);
                         if (opponentPiece) drawOpponentPiece(opponentPiece, oppScale);
                     }
@@ -639,7 +634,7 @@
             } else if (data.type === 'gameover') {
                 endGame(true);
             } else if (data.type === 'restart') {
-                restart(false);
+                restart(false, true);
             }
         }
 
