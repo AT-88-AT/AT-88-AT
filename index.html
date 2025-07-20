@@ -539,4 +539,232 @@
                 drawBoard(ctx, board);
                 if (hardDropping) {
                     const elapsed = Date.now() - hardDropStart;
-                    const
+                    const progress = Math.min(1, elapsed / hardDropAnimTime);
+                    if (progress >= 1) {
+                        hardDropping = false;
+                        piece.y += hardDropDist;
+                        merge();
+                        const lines = removeLines();
+                        if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
+                        sendState();
+                        piece = nextPiece;
+                        nextPiece = new Piece();
+                        if (piece.collide()) endGame();
+                        dropStart = Date.now();
+                    } else {
+                        const offset = progress * hardDropDist * SQ;
+                        piece.draw(ctx, 0, offset - 7, 0.5);
+                        piece.draw(ctx, 0, offset);
+                    }
+                } else {
+                    if (Date.now() - dropStart > getInterval()) drop();
+                    if (softDropActive) piece.draw(ctx, 0, -5, 0.5);
+                    if (lastHorizontalDir !== 0) piece.draw(ctx, lastHorizontalDir * -3, 0, 0.5);
+                    piece.draw(ctx);
+                }
+                if (isMultiplayer) {
+                    ctxOpponent.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
+                    const oppScale = isMobile ? 0.1875 : 1;
+                    drawBoard(ctxOpponent, opponentBoard, oppScale);
+                    if (opponentPiece) drawOpponentPiece(opponentPiece, oppScale);
+                }
+                nextPiece.drawPreview(ctxPreview);
+            }
+            requestAnimationFrame(gameLoop);
+        }
+
+        function receiveData(data) {
+            if (data.type === 'board') {
+                opponentBoard = data.board;
+                opponentPiece = data.piece;
+                opponentScore = data.score;
+                opponentLevel = data.level;
+                updateScoreDisplay();
+                updateLevelDisplay();
+            } else if (data.type === 'attack') {
+                addGarbage(data.lines);
+            } else if (data.type === 'gameover') {
+                endGame(true);
+            } else if (data.type === 'restart') {
+                restart(false);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('startBtn').addEventListener('click', () => restart(true));
+        document.getElementById('pauseBtn').addEventListener('click', togglePause);
+        document.getElementById('resumeBtn').addEventListener('click', togglePause);
+        document.getElementById('restartBtn').addEventListener('click', () => restart(!isMultiplayer));
+
+        const musicBtn = document.getElementById('musicToggle');
+        musicBtn.addEventListener('click', () => {
+            musicOn = !musicOn;
+            musicBtn.textContent = musicOn ? 'Music On' : 'Music Off';
+            if (musicOn) playTheme();
+            else clearTimeout(themeTimeout);
+        });
+
+        const sfxBtn = document.getElementById('sfxToggle');
+        sfxBtn.addEventListener('click', () => {
+            sfxOn = !sfxOn;
+            sfxBtn.textContent = sfxOn ? 'SFX On' : 'SFX Off';
+        });
+
+        document.getElementById('musicVolume').addEventListener('input', e => musicVolume = parseFloat(e.target.value));
+
+        document.addEventListener('keydown', e => {
+            if (paused || gameOver || !gameStarted || !piece) return;
+            const key = e.key.toLowerCase();
+            if (key === 'a' || key === 'arrowleft') {
+                lastHorizontalDir = -1;
+                piece.move({x: -1, y: 0});
+            }
+            if (key === 'd' || key === 'arrowright') {
+                lastHorizontalDir = 1;
+                piece.move({x: 1, y: 0});
+            }
+            if (key === 's' || key === 'arrowdown') softDropActive = true;
+            if (key === 'w' || key === 'arrowup') piece.rotate();
+            if (key === ' ' && !hardDropPressed) {
+                hardDropPressed = true;
+                hardDropDist = 0;
+                let tempY = piece.y;
+                while (true) {
+                    piece.y++;
+                    if (piece.collide()) {
+                        piece.y = tempY;
+                        break;
+                    }
+                    hardDropDist++;
+                }
+                if (hardDropDist > 0) {
+                    animationSpeed = 2.11;
+                    hardDropAnimTime = hardDropDist * 25;
+                    setTimeout(() => animationSpeed = 1, hardDropAnimTime);
+                    hardDropping = true;
+                    hardDropStart = Date.now();
+                    if (sfxOn) playTone(100, 200, 0.2);
+                } else {
+                    merge();
+                    const lines = removeLines();
+                    if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
+                    sendState();
+                    piece = nextPiece;
+                    nextPiece = new Piece();
+                    if (piece.collide()) endGame();
+                    dropStart = Date.now();
+                    hardDropPressed = false;
+                }
+            }
+        });
+
+        document.addEventListener('keyup', e => {
+            const key = e.key.toLowerCase();
+            if (key === 's' || key === 'arrowdown') softDropActive = false;
+            if (key === ' ') hardDropPressed = false;
+        });
+
+        if (isMobile) {
+            document.getElementById('mobileLeft').addEventListener('touchstart', e => {
+                e.preventDefault();
+                if (!paused && !gameOver && gameStarted && piece) {
+                    lastHorizontalDir = -1;
+                    piece.move({x: -1, y: 0});
+                }
+            });
+            document.getElementById('mobileRight').addEventListener('touchstart', e => {
+                e.preventDefault();
+                if (!paused && !gameOver && gameStarted && piece) {
+                    lastHorizontalDir = 1;
+                    piece.move({x: 1, y: 0});
+                }
+            });
+            document.getElementById('mobileRotate').addEventListener('touchstart', e => {
+                e.preventDefault();
+                if (!paused && !gameOver && gameStarted && piece) piece.rotate();
+            });
+            document.getElementById('mobileHardDrop').addEventListener('touchstart', e => {
+                e.preventDefault();
+                if (!paused && !gameOver && gameStarted && piece && !hardDropPressed) {
+                    hardDropPressed = true;
+                    hardDropDist = 0;
+                    let tempY = piece.y;
+                    while (true) {
+                        piece.y++;
+                        if (piece.collide()) {
+                            piece.y = tempY;
+                            break;
+                        }
+                        hardDropDist++;
+                    }
+                    if (hardDropDist > 0) {
+                        animationSpeed = 2.11;
+                        hardDropAnimTime = hardDropDist * 25;
+                        setTimeout(() => animationSpeed = 1, hardDropAnimTime);
+                        hardDropping = true;
+                        hardDropStart = Date.now();
+                        if (sfxOn) playTone(100, 200, 0.2);
+                    } else {
+                        merge();
+                        const lines = removeLines();
+                        if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
+                        sendState();
+                        piece = nextPiece;
+                        nextPiece = new Piece();
+                        if (piece.collide()) endGame();
+                        dropStart = Date.now();
+                        hardDropPressed = false;
+                    }
+                }
+            });
+            const mobileDown = document.getElementById('mobileDown');
+            mobileDown.addEventListener('touchstart', e => {
+                e.preventDefault();
+                if (!paused && !gameOver && gameStarted && piece) softDropActive = true;
+            });
+            mobileDown.addEventListener('touchend', e => {
+                e.preventDefault();
+                softDropActive = false;
+            });
+        }
+
+        document.getElementById('hostBtn').addEventListener('click', () => {
+            const gameId = suid();
+            peer = new Peer(gameId, {debug: 3});
+            peer.on('open', id => {
+                document.getElementById('gameId').textContent = id;
+                document.getElementById('gameIdDisplay').style.display = 'block';
+                isHost = true;
+                document.body.className = 'multiplayer';
+                restart(false);
+            });
+            peer.on('connection', c => {
+                conn = c;
+                conn.on('open', () => {
+                    console.log('Connected to player');
+                    sendState();
+                });
+                conn.on('data', receiveData);
+            });
+            peer.on('error', err => console.error('PeerJS error:', err));
+        });
+
+        document.getElementById('joinBtn').addEventListener('click', () => {
+            const gameId = document.getElementById('gameIdInput').value;
+            peer = new Peer(null, {debug: 3});
+            peer.on('open', id => {
+                conn = peer.connect(gameId);
+                conn.on('open', () => {
+                    console.log('Connected to host');
+                    document.body.className = 'multiplayer';
+                    restart(false);
+                });
+                conn.on('data', receiveData);
+            });
+            peer.on('error', err => console.error('PeerJS error:', err));
+        });
+
+        gameLoop();
+    </script>
+</body>
+</html>
