@@ -121,7 +121,6 @@
         <p>Score: <span id="scoreDisplay">0</span></p>
         <button id="restartBtn">Restart?</button>
     </div>
-    <script src="https://unpkg.com/short-unique-id@latest/dist/short-unique-id.min.js"></script>
     <script src="https://unpkg.com/peerjs@latest/dist/peerjs.min.js"></script>
     <script>
         const canvas = document.getElementById('tetrisCanvas');
@@ -162,11 +161,6 @@
         let conn = null;
         const isMobile = window.innerWidth <= 600;
         let moveInterval;
-        const suid = new ShortUniqueId({ length: 6 });
-
-        function generateShortId() {
-            return suid().toUpperCase();
-        }
 
         const peerConfig = {
             host: '0.peerjs.com',
@@ -529,6 +523,13 @@
             if (isMultiplayer && conn && !win) conn.send({type: 'gameover'});
         }
 
+        function drawInitial() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBoard(ctx, board);
+            if (piece) piece.draw(ctx);
+            nextPiece.drawPreview(ctxPreview);
+        }
+
         function restart(singleplayer = true) {
             board = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
             opponentBoard = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
@@ -557,6 +558,7 @@
                 const boards = document.getElementById('boards');
                 boards.insertBefore(opponentCanvas, canvas);
             }
+            drawInitial();  // Ensure immediate draw
         }
 
         function togglePause() {
@@ -644,8 +646,7 @@
         function setupMultiplayer(host, joinId = null) {
             isHost = host;
             if (host) {
-                const shortId = generateShortId();
-                peer = new Peer(shortId, peerConfig);
+                peer = new Peer(peerConfig);
                 peer.on('open', id => {
                     console.log('Hosted with ID:', id);
                     document.getElementById('gameId').textContent = id;
@@ -658,24 +659,19 @@
                 });
                 peer.on('error', err => {
                     console.error('PeerJS error:', err);
-                    if (err.type === 'unavailable-id') {
-                        alert('Game ID unavailable. Retrying...');
-                        peer.destroy();
-                        setupMultiplayer(true);
-                    } else {
-                        alert('Multiplayer error: ' + err.message);
-                    }
+                    alert('Multiplayer error: ' + err.message);
                 });
             } else {
-            peer = new Peer(peerConfig);
-            peer.on('open', id => {
-                console.log('Joiner peer open');
-                if (joinId) joinMultiplayer(joinId);
-            });
-            peer.on('error', err => {
-                console.error('PeerJS error:', err);
-                alert('Multiplayer error: ' + err.message);
-            });
+                peer = new Peer(peerConfig);
+                peer.on('open', id => {
+                    console.log('Joiner peer open');
+                    if (joinId) joinMultiplayer(joinId);
+                });
+                peer.on('error', err => {
+                    console.error('PeerJS error:', err);
+                    alert('Multiplayer error: ' + err.message);
+                });
+            }
         }
 
         function joinMultiplayer(id) {
@@ -844,7 +840,7 @@
         });
 
         document.getElementById('joinBtn').addEventListener('click', () => {
-            const gameId = document.getElementById('gameIdInput').value.toUpperCase();
+            const gameId = document.getElementById('gameIdInput').value;
             setupMultiplayer(false, gameId);
         });
 
