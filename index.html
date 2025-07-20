@@ -29,6 +29,8 @@
         #opponentArea { display: flex; flex-direction: column; align-items: center; margin-left: 20px; }
         #opponentScore { margin: 10px; font-size: 20px; }
         #opponentLevel { margin: 10px; font-size: 20px; }
+        .multiplayer #level, .multiplayer #opponentLevel { display: none; }
+        #p2Label { text-align: center; }
         @media (max-width: 600px) {
             body { flex-direction: column; padding: 10px; overflow-y: scroll; }
             #sidebar { width: auto; text-align: center; }
@@ -48,11 +50,6 @@
             body.multiplayer #opponentArea { order: 2; }
             body.multiplayer #rightSide { order: 1; }
             body.multiplayer #boards { order: 3; }
-        }
-        @media (min-width: 601px) {
-            #main { flex-direction: column-reverse; }
-            #controls { order: 2; }
-            #gameArea { order: 1; flex-direction: row; }
         }
     </style>
 </head>
@@ -179,9 +176,9 @@
 
         canvas.width = COL * SQ;
         canvas.height = ROW * SQ;
-        opponentCanvas.width = isMobile ? 78.88 : COL * SQ; // Scaled up 16% for mobile opponent too
+        opponentCanvas.width = isMobile ? 78.88 : COL * SQ;
         opponentCanvas.height = isMobile ? 157.76 : ROW * SQ;
-        previewCanvas.width = isMobile ? 43.2 : 120; // 54 * 0.8 = 43.2 for 20% smaller
+        previewCanvas.width = isMobile ? 43.2 : 120;
         previewCanvas.height = isMobile ? 43.2 : 120;
 
         function initAudioContext() {
@@ -552,7 +549,13 @@
             }
             if (isMobile && isMultiplayer) {
                 const boards = document.getElementById('boards');
-                boards.insertBefore(opponentCanvas, canvas);
+                const opponentWrapper = document.createElement('div');
+                opponentWrapper.style.display = 'flex';
+                opponentWrapper.style.flexDirection = 'column';
+                opponentWrapper.style.alignItems = 'center';
+                opponentWrapper.appendChild(opponentCanvas);
+                opponentWrapper.appendChild(document.getElementById('p2Label'));
+                boards.insertBefore(opponentWrapper, canvas);
             }
         }
 
@@ -695,6 +698,21 @@
             console.log('Connected to ' + (isHost ? 'player' : 'host'));
             document.body.className = 'multiplayer';
             restart(false);
+            if (isMobile) {
+                const rightSide = document.getElementById('rightSide');
+                const preview = document.getElementById('previewCanvas');
+                const scoresDiv = document.createElement('div');
+                scoresDiv.id = 'scoresDiv';
+                scoresDiv.appendChild(document.getElementById('score'));
+                scoresDiv.appendChild(document.getElementById('opponentScore'));
+                rightSide.insertBefore(scoresDiv, preview);
+                rightSide.style.display = 'flex';
+                rightSide.style.flexDirection = 'row';
+                rightSide.style.alignItems = 'center';
+                scoresDiv.style.display = 'flex';
+                scoresDiv.style.flexDirection = 'column';
+                scoresDiv.style.marginRight = '10px';
+            }
         }
 
         function startMove(dir) {
