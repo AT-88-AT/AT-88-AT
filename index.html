@@ -159,9 +159,9 @@
         const peerConfig = {
             host: '0.peerjs.com',
             port: 443,
-            path: '/',  // Added for broker compatibility
+            path: '/',
             secure: true,
-            debug: 3,  // Enable debug logging for ICE issues (view in console)
+            debug: 3,
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
@@ -169,15 +169,21 @@
                     { urls: 'stun:stun2.l.google.com:19302' },
                     { urls: 'stun:stun3.l.google.com:19302' },
                     { urls: 'stun:stun4.l.google.com:19302' },
-                    { urls: 'stun:stun.stunprotocol.org:3478' },  // Added reliable STUN
-                    { urls: 'stun:stun.sipnet.net:3478' },  // Added
-                    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-                    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-                    { urls: 'turn:turn.anyfirewall.com:443?transport=tcp', username: 'webrtc', credential: 'webrtc' },  // Added backup TURN
-                    { urls: 'turn:numb.viagenie.ca', username: 'free', credential: 'muazkh' }  // Added free TURN (credentials public, may expire)
+                    { urls: 'stun:stun.stunprotocol.org:3478' },
+                    { urls: 'stun:stun.sipnet.net:3478' },
+                    { urls: 'stun:stun.services.mozilla.com' }, // Added fallback STUN
+                    { urls: 'turn:staticauth.openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayprojectsecret' },
+                    { urls: 'turn:staticauth.openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayprojectsecret' },
+                    { urls: 'turns:staticauth.openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayprojectsecret' },
+                    { urls: 'turn:turn.anyfirewall.com:443?transport=tcp', username: 'webrtc', credential: 'webrtc' },
+                    { urls: 'turn:relay1.expressturn.com:3478', username: 'efI4V8R4T7MDY7L9', credential: '2x6n9j5d' }, // Added alternative TURN for restricted regions
+                    { urls: 'turns:relay1.expressturn.com:5349', username: 'efI4V8R4T7MDY7L9', credential: '2x6n9j5d' } // Secure TCP fallback
                 ],
-                iceTransportPolicy: 'all',  // Allow relay if direct fails
-                iceCandidatePoolSize: 10  // Increase candidates for better traversal
+                iceTransportPolicy: 'all',
+                iceCandidatePoolSize: 12, // Increased for better NAT probing
+                sdpSemantics: 'unified-plan',
+                bundlePolicy: 'max-bundle', // Optimize for bandwidth in restricted nets
+                rtcpMuxPolicy: 'require' // Force mux for efficiency
             }
         };
 
@@ -444,7 +450,7 @@
                 sendState();
                 piece = nextPiece;
                 nextPiece = new Piece();
-                sendState(); // Added: Send new piece state immediately after spawn
+                sendState();
                 if (piece.collide()) endGame();
             }
             dropStart = Date.now();
@@ -603,7 +609,7 @@
                     sendState();
                     piece = nextPiece;
                     nextPiece = new Piece();
-                    sendState(); // Added: Send new piece state immediately after spawn
+                    sendState();
                     if (piece.collide()) endGame();
                     dropStart = Date.now();
                 } else {
@@ -664,7 +670,7 @@
                 });
                 peer.on('error', err => {
                     console.error('PeerJS error:', err.type, err);
-                    alert('Multiplayer error: ' + err.type + '. Check network/firewall or try different devices. Details in console.');
+                    alert(`Multiplayer error: ${err.type}. ${err.message || ''} Check console for ICE details; ensure HTTPS and TURN config. In restricted regions, use personal TURN keys.`);
                 });
             } else {
                 peer = new Peer(peerConfig);
@@ -674,13 +680,13 @@
                 });
                 peer.on('error', err => {
                     console.error('PeerJS error:', err.type, err);
-                    alert('Multiplayer error: ' + err.type + '. Check network/firewall or try different devices. Details in console.');
+                    alert(`Multiplayer error: ${err.type}. ${err.message || ''} Check console for ICE details; ensure HTTPS and TURN config. In restricted regions, use personal TURN keys.`);
                 });
             }
         }
 
         function joinMultiplayer(id) {
-            conn = peer.connect(id, { reliable: true });  // Added reliable for better data transfer
+            conn = peer.connect(id, { reliable: true, serialization: 'json' }); // Enhanced reliability
             setupConnection();
             conn.on('open', onConnectionOpen);
         }
@@ -693,7 +699,10 @@
             });
             conn.on('error', err => {
                 console.error('Connection error:', err);
-                alert('Connection failed. Check console for details.');
+                alert('Connection failed. Check console for details; try alternative TURN or VPN bypass.');
+            });
+            conn.on('iceStateChanged', state => {
+                console.log('ICE state:', state); // Added diagnostic logging
             });
         }
 
