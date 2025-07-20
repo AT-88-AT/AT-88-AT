@@ -73,8 +73,8 @@
         <div id="controls">
             <label>Difficulty:
                 <select id="difficulty">
-                    <option value="1">Easy</option>
-                    <option value="5" selected>Medium</option>
+                    <option value="1" selected>Easy</option>
+                    <option value="5">Medium</option>
                     <option value="10">Hard</option>
                 </select>
             </label>
@@ -97,6 +97,7 @@
             </div>
             <div id="opponentArea" style="display:none;">
                 <canvas id="opponentCanvas" width="300" height="600"></canvas>
+                <div id="p2Label" style="font-size: 16px; margin: 5px 0;">P2</div>
                 <div id="opponentScore">P2 Score: 0</div>
                 <div id="opponentLevel">P2 Level: 1</div>
             </div>
@@ -129,7 +130,7 @@
         const ctxPreview = previewCanvas.getContext('2d');
         const ROW = 20, COL = 10, VACANT = '#111';
         const isMobile = window.innerWidth <= 600;
-        const SQ = isMobile ? 24 : 30;
+        const SQ = isMobile ? 18 : 30;
         let board = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
         let opponentBoard = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
         let opponentPiece = null;
@@ -178,10 +179,10 @@
 
         canvas.width = COL * SQ;
         canvas.height = ROW * SQ;
-        opponentCanvas.width = isMobile ? 90 : COL * SQ;
-        opponentCanvas.height = isMobile ? 180 : ROW * SQ;
-        previewCanvas.width = isMobile ? 72 : 120;
-        previewCanvas.height = isMobile ? 72 : 120;
+        opponentCanvas.width = isMobile ? 68 : COL * SQ;
+        opponentCanvas.height = isMobile ? 135 : ROW * SQ;
+        previewCanvas.width = isMobile ? 54 : 120;
+        previewCanvas.height = isMobile ? 54 : 120;
 
         function initAudioContext() {
             if (!audioCtx) {
@@ -239,8 +240,7 @@
             if (!musicOn || isThemePlaying) return;
             isThemePlaying = true;
             if (themeIndex >= music.length) themeIndex = 0;
-            const speedFactor = 1 + (level - 1) * 0.05;
-            const dur = music[themeIndex].dur / speedFactor;
+            const dur = music[themeIndex].dur;
             playTone(music[themeIndex].note, dur, musicVolume);
             themeIndex++;
             themeTimeout = setTimeout(() => {
@@ -599,7 +599,7 @@
                 }
                 if (isMultiplayer) {
                     ctxOpponent.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
-                    const oppScale = isMobile ? 90 / (COL * SQ) : 1;
+                    const oppScale = isMobile ? 68 / (COL * SQ) : 1;
                     drawBoard(ctxOpponent, opponentBoard, oppScale);
                     if (opponentPiece) drawOpponentPiece(opponentPiece, oppScale);
                 }
@@ -611,7 +611,7 @@
                     if (piece) piece.draw(ctx);
                     if (isMultiplayer) {
                         ctxOpponent.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
-                        const oppScale = isMobile ? 90 / (COL * SQ) : 1;
+                        const oppScale = isMobile ? 68 / (COL * SQ) : 1;
                         drawBoard(ctxOpponent, opponentBoard, oppScale);
                         if (opponentPiece) drawOpponentPiece(opponentPiece, oppScale);
                     }
@@ -699,6 +699,7 @@
         }
 
         function handleHardDrop() {
+            if (hardDropping) return;
             hardDropDist = 0;
             let tempY = piece.y;
             while (true) {
