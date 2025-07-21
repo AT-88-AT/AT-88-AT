@@ -148,6 +148,7 @@
         let hardDropStart = 0;
         let hardDropDist = 0;
         let hardDropAnimTime = 500;
+        let hardDropPressed = false;
         let audioCtx = null;
         let lastType = -1;
         let consecutiveCount = 0;
@@ -160,7 +161,7 @@
         const peerConfig = {
             host: '0.peerjs.com',
             port: 443,
-            path: '/peerjs',
+            path: '/',
             secure: true,
             debug: 3,
             config: {
@@ -874,7 +875,8 @@
                 drop();
             }
             if (key === 'w' || key === 'arrowup') piece.rotate();
-            if (key === ' ') {
+            if (key === ' ' && !hardDropPressed) {
+                hardDropPressed = true;
                 handleHardDrop();
             }
         });
@@ -882,6 +884,7 @@
         document.addEventListener('keyup', e => {
             const key = e.key.toLowerCase();
             if (key === 's' || key === 'arrowdown') softDropActive = false;
+            if (key === ' ') hardDropPressed = false;
         });
 
         if (isMobile) {
@@ -910,7 +913,14 @@
             });
             document.getElementById('mobileHardDrop').addEventListener('touchstart', e => {
                 e.preventDefault();
-                handleButtonPress('hardDrop');
+                if (!hardDropPressed) {
+                    hardDropPressed = true;
+                    handleButtonPress('hardDrop');
+                }
+            });
+            document.getElementById('mobileHardDrop').addEventListener('touchend', e => {
+                e.preventDefault();
+                hardDropPressed = false;
             });
         }
 
