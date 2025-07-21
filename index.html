@@ -70,7 +70,7 @@
                     <option value="10">Hard</option>
                 </select>
             </label>
-            <button id="musicToggle">Music Off</button>
+            <button id="musicToggle">Music On</button>
             <button id="sfxToggle">SFX On</button>
             <button id="startBtn">Start Singleplayer</button>
             <button id="pauseBtn" style="display:none;">Pause</button>
@@ -137,7 +137,7 @@
         let isHost = false;
         let rotateSoundIndex = 0;
         let softDropActive = false;
-        let musicOn = false;
+        let musicOn = true;
         let sfxOn = true;
         let musicVolume = 0.1;
         let lastHorizontalDir = 0;
@@ -550,6 +550,7 @@
             nextPiece = new Piece();
             dropStart = Date.now();
             drawInitial();
+            if (musicOn) playTheme();
             if (isMultiplayer && conn) {
                 if (!fromRemote) conn.send({type: 'restart'});
                 sendState();
@@ -657,7 +658,7 @@
             }
         }
 
-        function retryConnection(callback, maxRetries = 3, delay = 2000) {
+        function retryConnection(callback, maxRetries = 3, delay = 6000) {
             let attempts = 0;
             function attempt() {
                 attempts++;
