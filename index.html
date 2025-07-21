@@ -812,8 +812,12 @@
         musicBtn.addEventListener('click', () => {
             musicOn = !musicOn;
             musicBtn.textContent = musicOn ? 'Music On' : 'Music Off';
-            if (musicOn) playTheme();
-            else clearTimeout(themeTimeout);
+            if (musicOn) {
+                playTheme();
+            } else {
+                clearTimeout(themeTimeout);
+                isThemePlaying = false;
+            }
         });
 
         const sfxBtn = document.getElementById('sfxToggle');
