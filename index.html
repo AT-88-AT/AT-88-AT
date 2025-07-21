@@ -114,7 +114,7 @@
         <p>Score: <span id="scoreDisplay">0</span></p>
         <button id="restartBtn">Restart?</button>
     </div>
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/peerjs@latest/dist/peerjs.min.js"></script>
     <script>
         const canvas = document.getElementById('tetrisCanvas');
         const ctx = canvas.getContext('2d');
@@ -159,9 +159,9 @@
         let missedPings = 0;
 
         const peerConfig = {
-            host: '0.peerjs.com',
+            host: 'peerjs.com',
             port: 443,
-            path: '/',
+            path: '/peerjs',
             secure: true,
             debug: 3,
             config: {
@@ -171,6 +171,7 @@
                     { urls: 'stun:stun2.l.google.com:19302' },
                     { urls: 'stun:stun3.l.google.com:19302' },
                     { urls: 'stun:stun4.l.google.com:19302' },
+                    { urls: 'stun:global.stun.twilio.com:3478' },
                     { urls: 'turn:staticauth.openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
                     { urls: 'turn:staticauth.openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
                     { urls: 'turns:staticauth.openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
@@ -378,7 +379,7 @@
             }
             collide(scale = 1) {
                 return this.shape.some((row, dy) => row.some((val, dx) => val && (
-                    this.x + dx < 0 || this.x + dx >= COL || this.y + dy >= ROW ||
+                    this.x + dx < 0 || this.x + dx >= COL || this.y + dy >= ROW || this.y + dy < 0 ||
                     (this.y + dy >= 0 && board[this.y + dy][this.x + dx] !== VACANT)
                 )));
             }
@@ -815,7 +816,7 @@
         }
 
         function handleButtonPress(dir) {
-            if (paused || gameOver || !gameStarted || !piece) return;
+            if (paused || gameOver || !gameStarted || !piece || hardDropping) return;
             if (dir === 'left') {
                 lastHorizontalDir = -1;
                 piece.move({x: -1, y: 0});
@@ -860,7 +861,7 @@
         document.getElementById('musicVolume').addEventListener('input', e => musicVolume = parseFloat(e.target.value));
 
         document.addEventListener('keydown', e => {
-            if (paused || gameOver || !gameStarted || !piece) return;
+            if (paused || gameOver || !gameStarted || !piece || hardDropping) return;
             const key = e.key.toLowerCase();
             if (key === 'a' || key === 'arrowleft') {
                 lastHorizontalDir = -1;
