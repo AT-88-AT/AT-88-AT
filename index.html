@@ -258,10 +258,11 @@
         document.addEventListener('click', resumeAndPlay);
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                initAudioContext();
-                if (musicOn) playTheme();
+                // No auto-resume; wait for user gesture to trigger resumeAndPlay via touch/click.
             } else {
                 if (audioCtx) audioCtx.suspend();
+                clearTimeout(themeTimeout);
+                isThemePlaying = false;
             }
         });
 
