@@ -16,7 +16,8 @@
         #controls { margin: 10px; text-align: right; }
         button, select, input { margin: 5px; padding: 10px; background: #333; color: white; border: 1px solid white; cursor: pointer; touch-action: manipulation; }
         #gameOver { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); padding: 20px; display: none; }
-        #score, #level { margin: 10px; font-size: 20px; display: inline-block; min-width: 120px; }
+        #score, #level { margin: 10px; font-size: 20px; display: inline-block; min-width: 120px; text-align: left; }
+        #opponentScore, #opponentLevel { margin: 10px; font-size: 20px; display: inline-block; min-width: 120px; text-align: left; }
         #mobileControls { display: none; margin: 10px; text-align: center; }
         #mobileControls button { padding: 12px; font-size: 18px; }
         #mobileLeft { width: 60px; }
@@ -27,34 +28,25 @@
         #multiplayerControls { margin: 10px; text-align: center; }
         #gameIdDisplay { margin: 10px; }
         #opponentArea { display: flex; flex-direction: column; align-items: center; margin-left: 20px; }
-        #opponentScore { margin: 10px; font-size: 20px; }
-        #opponentLevel { margin: 10px; font-size: 20px; }
+        .multiplayer #level, .multiplayer #opponentLevel { display: none; }
+        #p2Label { text-align: center; }
         @media (max-width: 600px) {
             body { flex-direction: column; padding: 10px; overflow-y: scroll; }
             #sidebar { width: auto; text-align: center; }
             #sidebar ul { padding-left: 0; }
             #controls { order: 0; text-align: center; display: flex; flex-direction: column; align-items: center; }
             #gameArea { flex-direction: column; align-items: center; justify-content: center; flex-wrap: nowrap; }
-            #previewCanvas { margin: 10px 0 0 0; width: 48px; height: 48px; }
-            #tetrisCanvas { width: 200px; height: 400px; }
-            #opponentCanvas { width: 37.5px; height: 75px; }
-            #score, #level { font-size: 16px; margin: 5px; width: auto; text-align: center; min-width: auto; }
-            #mobileControls { display: block; }
-            #musicVolume-label { display: none; }
+            #previewCanvas { margin: 10px 0 0 0; }
+            #score, #level, #opponentScore, #opponentLevel { font-size: 16px; margin: 5px; width: auto; text-align: left; min-width: 80px; }
+            #mobileVolume-label { display: none; }
             #startBtn { order: 3; align-self: center; }
             #sfxToggle { margin-right: 10px; }
-            #opponentScore, #opponentLevel { font-size: 10px; margin: 2px; }
             body.singleplayer #boards { order: 1; }
             body.singleplayer #rightSide { order: 2; }
             body.singleplayer #opponentArea { order: 3; }
-            body.multiplayer #opponentArea { order: 1; }
-            body.multiplayer #rightSide { order: 2; }
+            body.multiplayer #opponentArea { order: 2; }
+            body.multiplayer #rightSide { order: 1; }
             body.multiplayer #boards { order: 3; }
-        }
-        @media (min-width: 601px) {
-            #main { flex-direction: column-reverse; }
-            #controls { order: 2; }
-            #gameArea { order: 1; flex-direction: row; }
         }
     </style>
 </head>
@@ -65,17 +57,19 @@
         <p>Stack tetrominoes to fill rows and clear lines. In VS mode, clearing multiple lines sends garbage to opponent. Reach higher levels for faster drops and exotic animations.</p>
         <h3>Controls</h3>
         <ul>
-            <li>WASD and ARROW buttons for movement</li>
-            <li>Space for hard drop</li>
+            <li>Left/Right: A/D or Left/Right arrows (move)</li>
+            <li>Soft Drop: S or Down arrow</li>
+            <li>Rotate: W or Up arrow</li>
+            <li>Hard Drop: Space</li>
         </ul>
     </div>
     <div id="main">
         <div id="controls">
             <label>Difficulty:
                 <select id="difficulty">
-                    <option value="800">Easy</option>
-                    <option value="500" selected>Medium</option>
-                    <option value="300">Hard</option>
+                    <option value="1" selected>Easy</option>
+                    <option value="5">Medium</option>
+                    <option value="10">Hard</option>
                 </select>
             </label>
             <button id="musicToggle">Music On</button>
@@ -89,21 +83,22 @@
             <button id="hostBtn">Host VS Game</button>
             <input id="gameIdInput" placeholder="Enter Game ID to Join">
             <button id="joinBtn">Join VS Game</button>
-            <div id="gameIdDisplay" style="display:none;">Your Game ID: <span id="gameId"></span></div>
+            <div id="gameIdDisplay" style="display:none;">Your Game ID: <span id="gameId"></span> <button id="copyIdBtn">Copy ID</button></div>
         </div>
         <div id="gameArea">
             <div id="boards">
-                <canvas id="tetrisCanvas" width="200" height="400"></canvas>
+                <canvas id="tetrisCanvas" width="300" height="600"></canvas>
             </div>
             <div id="opponentArea" style="display:none;">
-                <canvas id="opponentCanvas" width="200" height="400"></canvas>
+                <canvas id="opponentCanvas" width="300" height="600"></canvas>
+                <div id="p2Label" style="font-size: 16px; margin: 5px 0;">P2</div>
                 <div id="opponentScore">P2 Score: 0</div>
                 <div id="opponentLevel">P2 Level: 1</div>
             </div>
             <div id="rightSide">
                 <div id="score">P1 Score: 0</div>
                 <div id="level">Level: 1</div>
-                <canvas id="previewCanvas" width="80" height="80"></canvas>
+                <canvas id="previewCanvas" width="120" height="120"></canvas>
             </div>
         </div>
         <div id="mobileControls">
@@ -119,7 +114,6 @@
         <p>Score: <span id="scoreDisplay">0</span></p>
         <button id="restartBtn">Restart?</button>
     </div>
-    <script src="https://unpkg.com/short-unique-id@latest/dist/short-unique-id.min.js"></script>
     <script src="https://unpkg.com/peerjs@latest/dist/peerjs.min.js"></script>
     <script>
         const canvas = document.getElementById('tetrisCanvas');
@@ -128,7 +122,9 @@
         const ctxOpponent = opponentCanvas.getContext('2d');
         const previewCanvas = document.getElementById('previewCanvas');
         const ctxPreview = previewCanvas.getContext('2d');
-        const ROW = 20, COL = 10, SQ = 20, VACANT = '#111';
+        const ROW = 20, COL = 10, VACANT = 0;
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 600;
+        let SQ = isMobile ? 20.88 : 30;
         let board = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
         let opponentBoard = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
         let opponentPiece = null;
@@ -141,10 +137,9 @@
         let gameStarted = false;
         let isMultiplayer = false;
         let isHost = false;
-        let baseInterval = 500;
         let rotateSoundIndex = 0;
         let softDropActive = false;
-        let musicOn = true;
+        let musicOn = false;
         let sfxOn = true;
         let musicVolume = 0.1;
         let lastHorizontalDir = 0;
@@ -159,13 +154,48 @@
         let consecutiveCount = 0;
         let peer = null;
         let conn = null;
-        const isMobile = window.innerWidth <= 600;
+        let moveInterval;
+        let lastSendTime = 0;
+        let missedPings = 0;
+
+        const peerConfig = {
+            host: 'peerjs.com',
+            port: 443,
+            path: '/peerjs',
+            secure: true,
+            debug: 3,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' },
+                    { urls: 'stun:global.stun.twilio.com:3478' },
+                    { urls: 'turn:staticauth.openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                    { urls: 'turn:staticauth.openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                    { urls: 'turns:staticauth.openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+                    { urls: 'turn:turn.anyfirewall.com:443?transport=tcp', username: 'webrtc', credential: 'webrtc' },
+                    { urls: 'turn:relay1.expressturn.com:3478', username: 'efI4V8R4T7MDY7L9', credential: '2x6n9j5d' },
+                    { urls: 'turns:relay1.expressturn.com:5349', username: 'efI4V8R4T7MDY7L9', credential: '2x6n9j5d' }
+                ],
+                iceTransportPolicy: 'all',
+                iceCandidatePoolSize: 0,
+                sdpSemantics: 'unified-plan',
+                bundlePolicy: 'max-bundle',
+                rtcpMuxPolicy: 'require'
+            }
+        };
+
+        canvas.width = COL * SQ;
+        canvas.height = ROW * SQ;
+        opponentCanvas.width = isMobile ? 78.88 : COL * SQ;
+        opponentCanvas.height = isMobile ? 157.76 : ROW * SQ;
+        previewCanvas.width = isMobile ? 43.2 : 120;
+        previewCanvas.height = isMobile ? 43.2 : 120;
 
         if (isMobile) {
-            previewCanvas.width = 48;
-            previewCanvas.height = 48;
-            opponentCanvas.width = 37.5;
-            opponentCanvas.height = 75;
+            document.getElementById('mobileControls').style.display = 'block';
         }
 
         function initAudioContext() {
@@ -224,12 +254,13 @@
             if (!musicOn || isThemePlaying) return;
             isThemePlaying = true;
             if (themeIndex >= music.length) themeIndex = 0;
-            playTone(music[themeIndex].note, music[themeIndex].dur, musicVolume);
+            const dur = music[themeIndex].dur;
+            playTone(music[themeIndex].note, dur, musicVolume);
             themeIndex++;
             themeTimeout = setTimeout(() => {
                 isThemePlaying = false;
                 playTheme();
-            }, music[themeIndex - 1].dur);
+            }, dur);
         }
 
         const resumeAndPlay = () => initAudioContext().then(() => {
@@ -254,30 +285,20 @@
         class Piece {
             constructor() {
                 let candidateType = Math.floor(Math.random() * PIECES.length);
-                let forceDifferent = false;
                 if (candidateType === lastType) {
-                    let potentialStreak = consecutiveCount + 1;
-                    if (potentialStreak >= 3) {
-                        forceDifferent = true;
-                    } else if (potentialStreak === 2 && Math.random() > 0.3) {
-                        forceDifferent = true;
-                    }
-                }
-                if (forceDifferent) {
-                    do {
-                        candidateType = Math.floor(Math.random() * PIECES.length);
-                    } while (candidateType === lastType);
-                    consecutiveCount = 0;
-                } else {
-                    if (candidateType === lastType) {
-                        consecutiveCount++;
-                    } else {
+                    consecutiveCount++;
+                    if (consecutiveCount >= 3 || (consecutiveCount === 2 && Math.random() > 0.5)) {
+                        do {
+                            candidateType = Math.floor(Math.random() * PIECES.length);
+                        } while (candidateType === lastType);
                         consecutiveCount = 0;
                     }
+                } else {
+                    consecutiveCount = 0;
                 }
                 this.type = candidateType;
                 lastType = this.type;
-                this.shape = PIECES[this.type];
+                this.shape = PIECES[this.type].map(row => row.slice());
                 this.hue = HUES[this.type];
                 this.x = Math.floor(COL / 2) - Math.floor(this.shape[0].length / 2);
                 this.y = 0;
@@ -303,21 +324,15 @@
             }
             drawPreview(ctxP) {
                 ctxP.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-                const originalSize = 80;
-                const scale = previewCanvas.width / originalSize;
-                const sq = SQ * scale;
-                const time = Date.now() / 200;
-                const hueAmp = Math.min(45, (level - 1) * 4.5);
-                const lightAmp = 15 + Math.min(30, (level - 1) * 3);
+                const previewSquares = 4;
+                const sq = previewCanvas.width / previewSquares;
                 const maxW = Math.max(...this.shape.map(row => row.length));
                 const maxH = this.shape.length;
-                const offsetX = (4 - maxW) / 2 * sq;
-                const offsetY = (4 - maxH) / 2 * sq;
+                const offsetX = (previewSquares - maxW) / 2 * sq;
+                const offsetY = (previewSquares - maxH) / 2 * sq;
                 this.shape.forEach((row, dy) => row.forEach((val, dx) => {
                     if (val) {
-                        const hue = this.hue + hueAmp * Math.sin(time / 5 + dx * 1.5 + dy);
-                        const light = 50 + lightAmp * Math.sin(time * 0.7 + dx * 2 + dy * 1.2);
-                        ctxP.fillStyle = `hsl(${hue}, 100%, ${light}%)`;
+                        ctxP.fillStyle = `hsl(${this.hue}, 100%, 50%)`;
                         ctxP.fillRect(offsetX + dx * sq, offsetY + dy * sq, sq, sq);
                         ctxP.strokeStyle = 'black';
                         ctxP.lineWidth = 1;
@@ -327,7 +342,7 @@
             }
             undraw(scale = 1) {
                 const sq = SQ * scale;
-                ctx.fillStyle = VACANT;
+                ctx.fillStyle = '#111';
                 this.shape.forEach((row, dy) => row.forEach((val, dx) => {
                     if (val) ctx.fillRect((this.x + dx) * sq, (this.y + dy) * sq, sq, sq);
                 }));
@@ -364,18 +379,9 @@
             }
             collide(scale = 1) {
                 return this.shape.some((row, dy) => row.some((val, dx) => val && (
-                    this.x + dx < 0 || this.x + dx >= COL || this.y + dy >= ROW ||
+                    this.x + dx < 0 || this.x + dx >= COL || this.y + dy >= ROW || this.y + dy < 0 ||
                     (this.y + dy >= 0 && board[this.y + dy][this.x + dx] !== VACANT)
                 )));
-            }
-            tempMoveForCalc(dir) {
-                const oldY = this.y;
-                this.y += dir.y;
-                if (this.collide()) {
-                    this.y = oldY;
-                    return true;
-                }
-                return false;
             }
         }
 
@@ -387,7 +393,7 @@
             const sq = SQ * scale;
             boardToDraw.forEach((row, y) => row.forEach((val, x) => {
                 if (val !== VACANT) {
-                    ctxDraw.fillStyle = val;
+                    ctxDraw.fillStyle = val === -1 ? 'hsl(0, 0%, 50%)' : `hsl(${HUES[val - 1]}, 100%, 50%)`;
                     ctxDraw.fillRect(x * sq, y * sq, sq, sq);
                     ctxDraw.strokeStyle = 'black';
                     ctxDraw.lineWidth = 1;
@@ -401,9 +407,10 @@
             const time = Date.now() / 200;
             const hueAmp = Math.min(45, (opponentLevel - 1) * 4.5);
             const lightAmp = 15 + Math.min(30, (opponentLevel - 1) * 3);
+            const hueBase = HUES[pieceData.type];
             pieceData.shape.forEach((row, dy) => row.forEach((val, dx) => {
                 if (val) {
-                    const hue = pieceData.hue + hueAmp * Math.sin(time / 5 + dx * 1.5 + dy);
+                    const hue = hueBase + hueAmp * Math.sin(time / 5 + dx * 1.5 + dy);
                     const light = 50 + lightAmp * Math.sin(time * 0.7 + dx * 2 + dy * 1.2);
                     ctxOpponent.fillStyle = `hsl(${hue}, 100%, ${light}%)`;
                     ctxOpponent.fillRect((pieceData.x + dx) * sq, (pieceData.y + dy) * sq, sq, sq);
@@ -419,32 +426,30 @@
             document.getElementById('opponentScore').textContent = `P2 Score: ${opponentScore}`;
         }
 
-        function updateLevel() {
-            const newLevel = Math.min(11, 1 + Math.floor(score / 500));
-            if (newLevel > level) {
-                level = newLevel;
-                document.getElementById('level').textContent = `Level: ${level}`;
-            }
+        function updateLevelDisplay() {
+            document.getElementById('level').textContent = `Level: ${level}`;
             document.getElementById('opponentLevel').textContent = `P2 Level: ${opponentLevel}`;
         }
 
         function getInterval() {
-            return Math.max(50, baseInterval - (level - 1) * 30) / (softDropActive ? 2 : 1);
+            return Math.max(100, 1000 - (level - 1) * 50) / (softDropActive ? 2 : 1);
         }
 
         function sendState() {
-            if (!isMultiplayer || !conn || gameOver) return;
+            if (!isMultiplayer || !conn || gameOver || !conn.open) return;
+            const now = Date.now();
+            if (now - lastSendTime < 50) return;
+            lastSendTime = now;
             conn.send({
                 type: 'board',
                 board: board,
                 score: score,
                 level: level,
-                piece: piece ? {x: piece.x, y: piece.y, shape: piece.shape.map(row => row.slice()), hue: piece.hue} : null
+                piece: piece ? {x: piece.x, y: piece.y, shape: piece.shape.map(row => row.slice()), type: piece.type} : null
             });
         }
 
         function drop() {
-            const oldY = piece.y;
             const moved = piece.move({x: 0, y: 1});
             if (!moved) {
                 merge();
@@ -453,6 +458,7 @@
                 sendState();
                 piece = nextPiece;
                 nextPiece = new Piece();
+                sendState();
                 if (piece.collide()) endGame();
             }
             dropStart = Date.now();
@@ -460,7 +466,7 @@
 
         function merge() {
             piece.shape.forEach((row, dy) => row.forEach((val, dx) => {
-                if (val) board[piece.y + dy][piece.x + dx] = `hsl(${piece.hue}, 100%, 50%)`;
+                if (val) board[piece.y + dy][piece.x + dx] = piece.type + 1;
             }));
             if (sfxOn) playTone(150, 150, 0.2);
         }
@@ -475,21 +481,47 @@
                     y++;
                 }
             }
-            score += lines * 100;
+            score += [0, 40, 100, 300, 1200][lines] * level;
             updateScoreDisplay();
-            updateLevel();
+            level = Math.floor(score / 1000) + parseInt(document.getElementById('difficulty').value);
+            updateLevelDisplay();
             if (lines > 0 && sfxOn) playTone(400 + lines * 100, 200, 0.2);
             return lines;
         }
 
         function addGarbage(numLines) {
+            let willTopOut = false;
+            for (let i = 0; i < numLines; i++) {
+                if (board[i].some(cell => cell !== VACANT)) {
+                    willTopOut = true;
+                    break;
+                }
+            }
+            let pieceOverlapsTop = false;
+            if (piece) {
+                for (let dy = 0; dy < piece.shape.length; dy++) {
+                    for (let dx = 0; dx < piece.shape[dy].length; dx++) {
+                        if (piece.shape[dy][dx] && (piece.y + dy < numLines)) {
+                            pieceOverlapsTop = true;
+                            break;
+                        }
+                    }
+                    if (pieceOverlapsTop) break;
+                }
+            }
+            if (pieceOverlapsTop) willTopOut = true;
+            if (willTopOut) {
+                endGame();
+                return;
+            }
             for (let i = 0; i < numLines; i++) {
                 board.shift();
-                let row = Array(COL).fill('hsl(0, 0%, 50%)');
+                let row = Array(COL).fill(-1);
                 row[Math.floor(Math.random() * COL)] = VACANT;
                 board.push(row);
             }
-            if (piece.collide()) endGame();
+            if (piece) piece.y -= numLines;
+            if (piece && piece.collide()) endGame();
             if (sfxOn) playTone(200, 200, 0.2);
         }
 
@@ -498,385 +530,249 @@
             document.getElementById('gameOver').style.display = 'block';
             document.getElementById('scoreDisplay').textContent = score;
             document.getElementById('gameOverTitle').textContent = win ? 'You Win!' : 'Simulation Over';
-            if (isMultiplayer && conn && !win) conn.send({type: 'gameover'});
+            document.getElementById('pauseBtn').style.display = 'none';
+            document.getElementById('resumeBtn').style.display = 'none';
             if (isMultiplayer && !isHost) document.getElementById('restartBtn').style.display = 'none';
+            if (isMultiplayer && conn && !win) conn.send({type: 'gameover'});
+            if (conn) conn.close();
+            if (peer) peer.destroy();
         }
 
-        function restart(singleplayer = true) {
-            // Reset layout to original
-            const tetrisCanvasEl = document.getElementById('tetrisCanvas');
-            const opponentCanvasEl = document.getElementById('opponentCanvas');
-            const previewCanvasEl = document.getElementById('previewCanvas');
-            const scoreEl = document.getElementById('score');
-            const levelEl = document.getElementById('level');
-            const opponentScoreEl = document.getElementById('opponentScore');
-            const opponentLevelEl = document.getElementById('opponentLevel');
+        function drawInitial() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBoard(ctx, board);
+            if (piece) piece.draw(ctx);
+            nextPiece.drawPreview(ctxPreview);
+        }
 
-            const oa = document.getElementById('opponentArea');
-            oa.innerHTML = '';
-            oa.appendChild(opponentCanvasEl);
-            oa.appendChild(opponentScoreEl);
-            oa.appendChild(opponentLevelEl);
-
-            const rs = document.getElementById('rightSide');
-            rs.innerHTML = '';
-            rs.appendChild(scoreEl);
-            rs.appendChild(levelEl);
-            rs.appendChild(previewCanvasEl);
-
-            const bds = document.getElementById('boards');
-            bds.innerHTML = '';
-            bds.appendChild(tetrisCanvasEl);
-            bds.style.flexDirection = 'row';
-            bds.style.alignItems = 'flex-start';
-
-            const existingSC = document.getElementById('scoresContainer');
-            if (existingSC) existingSC.remove();
-
+        function restart(singleplayer = true, fromRemote = false) {
             board = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
             opponentBoard = Array.from({length: ROW}, () => Array(COL).fill(VACANT));
             opponentPiece = null;
             score = 0;
             opponentScore = 0;
-            level = 1;
+            level = parseInt(document.getElementById('difficulty').value);
             opponentLevel = 1;
             updateScoreDisplay();
-            document.getElementById('level').textContent = `Level: ${level}`;
+            updateLevelDisplay();
             gameOver = false;
             paused = false;
             gameStarted = true;
             isMultiplayer = !singleplayer;
-            if (isMultiplayer) {
-                document.body.classList.add('multiplayer');
-                document.body.classList.remove('singleplayer');
-                document.getElementById('level').style.display = 'none';
-                document.getElementById('opponentLevel').style.display = 'none';
-            } else {
-                document.body.classList.add('singleplayer');
-                document.body.classList.remove('multiplayer');
-                document.getElementById('level').style.display = 'inline-block';
-                document.getElementById('opponentLevel').style.display = 'none';
-            }
             document.getElementById('opponentArea').style.display = singleplayer ? 'none' : 'flex';
-
-            if (isMultiplayer && isMobile) {
-                const scoresContainer = document.createElement('div');
-                scoresContainer.id = 'scoresContainer';
-                document.getElementById('gameArea').insertBefore(scoresContainer, document.getElementById('gameArea').firstChild);
-                scoresContainer.appendChild(opponentScoreEl);
-                scoresContainer.appendChild(scoreEl);
-                scoresContainer.style.display = 'flex';
-                scoresContainer.style.justifyContent = 'space-around';
-                scoresContainer.style.width = '100%';
-                opponentScoreEl.style.fontSize = '16px';
-                opponentScoreEl.style.margin = '5px';
-                bds.insertBefore(opponentCanvasEl, tetrisCanvasEl);
-                bds.style.display = 'flex';
-                bds.style.flexDirection = 'row';
-                bds.style.alignItems = 'flex-start';
-                bds.style.justifyContent = 'center';
-                document.getElementById('opponentArea').style.display = 'none';
-            }
-
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('pauseBtn').style.display = 'inline-block';
+            document.getElementById('resumeBtn').style.display = 'none';
             lastType = -1;
             consecutiveCount = 0;
             piece = new Piece();
             nextPiece = new Piece();
-            document.getElementById('gameOver').style.display = 'none';
-            document.getElementById('startBtn').style.display = 'none';
-            document.getElementById('resumeBtn').style.display = 'none';
-            document.getElementById('pauseBtn').style.display = 'inline';
-            document.getElementById('restartBtn').style.display = 'inline';
-            initAudioContext().then(() => {
-                playSilent();
-                if (musicOn) playTheme();
-            });
-            sendState();
             dropStart = Date.now();
+            drawInitial();
+            if (isMultiplayer && conn) {
+                if (!fromRemote) conn.send({type: 'restart'});
+                sendState();
+            }
+            if (isMobile && isMultiplayer) {
+                const boards = document.getElementById('boards');
+                const opponentWrapper = document.createElement('div');
+                opponentWrapper.style.display = 'flex';
+                opponentWrapper.style.flexDirection = 'column';
+                opponentWrapper.style.alignItems = 'center';
+                opponentWrapper.appendChild(opponentCanvas);
+                opponentWrapper.appendChild(document.getElementById('p2Label'));
+                boards.insertBefore(opponentWrapper, canvas);
+            }
+            lastSendTime = 0;
         }
 
-        function togglePause() {
+        function togglePause(sendToPeer = true) {
             paused = !paused;
             if (paused) {
                 document.getElementById('pauseBtn').style.display = 'none';
-                document.getElementById('resumeBtn').style.display = 'inline';
+                document.getElementById('resumeBtn').style.display = 'inline-block';
             } else {
                 document.getElementById('resumeBtn').style.display = 'none';
-                document.getElementById('pauseBtn').style.display = 'inline';
+                document.getElementById('pauseBtn').style.display = 'inline-block';
+                dropStart = Date.now();
+            }
+            if (isMultiplayer && conn && sendToPeer) {
+                conn.send({type: paused ? 'pause' : 'resume'});
             }
         }
 
         function gameLoop() {
-            if (!paused && !gameOver) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                drawBoard(ctx, board);
-                if (isMultiplayer) {
-                    ctxOpponent.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
-                    const oppScale = isMobile ? 0.1875 : 1;
-                    drawBoard(ctxOpponent, opponentBoard, oppScale);
-                    if (opponentPiece) drawOpponentPiece(opponentPiece, oppScale);
-                }
-                nextPiece.drawPreview(ctxPreview);
-                if (hardDropping) {
-                    const elapsed = Date.now() - hardDropStart;
-                    const progress = Math.min(1, elapsed / hardDropAnimTime);
-                    if (progress >= 1) {
-                        hardDropping = false;
-                        piece.y += hardDropDist;
-                        merge();
-                        const lines = removeLines();
-                        if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
-                        sendState();
-                        piece = nextPiece;
-                        nextPiece = new Piece();
-                        if (piece.collide()) endGame();
-                        dropStart = Date.now();
-                        sendState();
-                    } else {
-                        const offset = progress * hardDropDist * SQ;
-                        piece.draw(ctx, 0, offset - 7, 0.5);
-                        piece.draw(ctx, 0, offset, 1);
+            if (!gameStarted || paused || gameOver) {
+                if (gameStarted) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    drawBoard(ctx, board);
+                    if (piece) piece.draw(ctx);
+                    if (isMultiplayer) {
+                        ctxOpponent.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
+                        const oppScale = isMobile ? 78.88 / (COL * SQ) : 1;
+                        drawBoard(ctxOpponent, opponentBoard, oppScale);
+                        if (opponentPiece) drawOpponentPiece(opponentPiece, oppScale);
                     }
+                    nextPiece.drawPreview(ctxPreview);
+                }
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBoard(ctx, board);
+            if (hardDropping) {
+                const elapsed = Date.now() - hardDropStart;
+                const progress = Math.min(1, elapsed / hardDropAnimTime);
+                if (progress >= 1) {
+                    hardDropping = false;
+                    piece.y += hardDropDist;
+                    merge();
+                    const lines = removeLines();
+                    if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
+                    sendState();
+                    piece = nextPiece;
+                    nextPiece = new Piece();
+                    sendState();
+                    if (piece.collide()) endGame();
+                    dropStart = Date.now();
                 } else {
-                    if (softDropActive) piece.draw(ctx, 0, -5, 0.5);
-                    if (lastHorizontalDir !== 0) piece.draw(ctx, lastHorizontalDir * -3, 0, 0.5);
-                    piece.draw(ctx);
-                    if (Date.now() - dropStart > getInterval()) drop();
+                    const offset = progress * hardDropDist * SQ;
+                    piece.draw(ctx, 0, offset -7, 0.5);
+                    piece.draw(ctx, 0, offset);
                 }
             } else {
-                nextPiece.drawPreview(ctxPreview);
+                if (Date.now() - dropStart > getInterval()) drop();
+                if (softDropActive) piece.draw(ctx, 0, -5, 0.5);
+                if (lastHorizontalDir !== 0) piece.draw(ctx, lastHorizontalDir * -3, 0, 0.5);
+                piece.draw(ctx);
             }
+            if (isMultiplayer) {
+                ctxOpponent.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
+                const oppScale = isMobile ? 78.88 / (COL * SQ) : 1;
+                drawBoard(ctxOpponent, opponentBoard, oppScale);
+                if (opponentPiece) drawOpponentPiece(opponentPiece, oppScale);
+            }
+            nextPiece.drawPreview(ctxPreview);
             requestAnimationFrame(gameLoop);
         }
 
-        function generateShortId() {
-            const uid = new ShortUniqueId({ length: 6 });
-            return uid.rnd().toUpperCase();
-        }
-
-        const peerConfig = {
-            host: '0.peerjs.com',
-            port: 443,
-            secure: true,
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' },
-                    { urls: 'stun:stun3.l.google.com:19302' },
-                    { urls: 'stun:stun4.l.google.com:19302' }
-                ]
+        function receiveData(data) {
+            if (data.type === 'board') {
+                opponentBoard = data.board;
+                opponentPiece = data.piece;
+                opponentScore = data.score;
+                opponentLevel = data.level;
+                updateScoreDisplay();
+                updateLevelDisplay();
+            } else if (data.type === 'attack') {
+                addGarbage(data.lines);
+            } else if (data.type === 'gameover') {
+                endGame(true);
+            } else if (data.type === 'restart') {
+                restart(false, true);
+            } else if (data.type === 'pause') {
+                togglePause(false);
+            } else if (data.type === 'resume') {
+                togglePause(false);
+            } else if (data.type === 'ping') {
+                conn.send({type: 'pong'});
+                missedPings = 0;
+            } else if (data.type === 'pong') {
+                missedPings = 0;
             }
-        };
+        }
 
         function setupMultiplayer(host, joinId = null) {
             isHost = host;
             if (host) {
-                const shortId = generateShortId();
-                peer = new Peer(shortId, peerConfig);
+                peer = new Peer(peerConfig);
                 peer.on('open', id => {
-                    console.log('Peer open with ID:', id);
+                    console.log('Hosted with ID:', id);
                     document.getElementById('gameId').textContent = id;
                     document.getElementById('gameIdDisplay').style.display = 'block';
                 });
-                peer.on('connection', connection => {
-                    conn = connection;
+                peer.on('connection', c => {
+                    conn = c;
                     setupConnection();
                     conn.on('open', onConnectionOpen);
                 });
                 peer.on('error', err => {
-                    console.error('Peer error:', err.type, err.message);
-                    if (err.type === 'unavailable-id') {
-                        peer.destroy();
-                        setupMultiplayer(true);
-                    } else {
-                        alert(`Peer error: ${err.type} - ${err.message}`);
-                    }
+                    console.error('PeerJS error:', err.type, err);
+                    alert(`Multiplayer error: ${err.type}. ${err.message || ''} Check console for ICE details; ensure HTTPS and TURN config. In restricted regions, use personal TURN keys.`);
                 });
             } else {
                 peer = new Peer(peerConfig);
-                peer.on('open', () => {
-                    console.log('Peer open for joiner');
-                    if (joinId) {
-                        joinMultiplayer(joinId);
-                    }
+                peer.on('open', id => {
+                    console.log('Joiner peer open with ID:', id);
+                    if (joinId) joinMultiplayer(joinId);
                 });
                 peer.on('error', err => {
-                    console.error('Peer error:', err.type, err.message);
-                    alert(`Peer error: ${err.type} - ${err.message}`);
+                    console.error('PeerJS error:', err.type, err);
+                    alert(`Multiplayer error: ${err.type}. ${err.message || ''}. Check console for details.`);
                 });
             }
         }
 
         function joinMultiplayer(id) {
-            conn = peer.connect(id);
+            conn = peer.connect(id, { reliable: true, serialization: 'json' });
+            let connectTimeout = setTimeout(() => {
+                if (!conn.open) {
+                    conn.close();
+                    alert('Connection timed out. Try again or check network.');
+                }
+            }, 15000);
+            conn.on('open', () => {
+                clearTimeout(connectTimeout);
+                onConnectionOpen();
+            });
             setupConnection();
-            conn.on('open', onConnectionOpen);
         }
 
         function setupConnection() {
-            conn.on('data', data => {
-                if (data.type === 'attack') addGarbage(data.lines);
-                if (data.type === 'board') {
-                    opponentBoard = data.board;
-                    opponentScore = data.score;
-                    opponentLevel = data.level;
-                    opponentPiece = data.piece;
-                    updateScoreDisplay();
-                    updateLevel();
-                }
-                if (data.type === 'gameover') endGame(true);
-                if (data.type === 'ready') {
-                    paused = false;
-                    dropStart = Date.now();
-                }
-                if (data.type === 'restart') {
-                    restart(false);
-                }
+            conn.on('data', (data) => {
+                receiveData(data);
             });
             conn.on('close', () => {
-                console.log('Connection closed');
-                alert('Opponent disconnected.');
+                alert('Opponent disconnected. You win!');
                 endGame(true);
             });
             conn.on('error', err => {
                 console.error('Connection error:', err);
-                alert(`Connection error: ${err}`);
+                alert('Connection failed. Check console for details; try alternative TURN or VPN.');
+            });
+            conn.on('iceStateChanged', state => {
+                console.log('ICE state:', state);
             });
         }
 
         function onConnectionOpen() {
-            console.log('Connection open');
+            console.log('Connected to ' + (isHost ? 'player' : 'host'));
+            document.body.className = 'multiplayer';
             restart(false);
-            conn.send({type: 'ready'});
+            if (isMobile) {
+                const boards = document.getElementById('boards');
+                const opponentWrapper = document.createElement('div');
+                opponentWrapper.style.display = 'flex';
+                opponentWrapper.style.flexDirection = 'column';
+                opponentWrapper.style.alignItems = 'center';
+                opponentWrapper.appendChild(opponentCanvas);
+                opponentWrapper.appendChild(document.getElementById('p2Label'));
+                boards.insertBefore(opponentWrapper, canvas);
+            }
             sendState();
+            let pingInterval = setInterval(() => {
+                if (conn.open) conn.send({type: 'ping'});
+            }, 5000);
+            let pingChecker = setInterval(() => {
+                missedPings++;
+                if (missedPings > 2) {
+                    clearInterval(pingInterval);
+                    clearInterval(pingChecker);
+                    alert('Connection lost (no response). Game over.');
+                    endGame(true);
+                }
+            }, 5000);
         }
-
-        document.addEventListener('keydown', e => {
-            if (gameOver || hardDropping) return;
-            if (e.key === 'Escape') {
-                if (!gameStarted) return;
-                togglePause();
-                return;
-            }
-            if (e.key === ' ' && !hardDropPressed) {
-                if (paused) return;
-                e.preventDefault();
-                hardDropPressed = true;
-                hardDropDist = 0;
-                let tempY = piece.y;
-                while (true) {
-                    piece.y++;
-                    if (piece.collide()) {
-                        piece.y = tempY;
-                        break;
-                    }
-                    hardDropDist++;
-                }
-                if (hardDropDist > 0) {
-                    animationSpeed = 2.11;
-                    hardDropAnimTime = hardDropDist * 25;
-                    setTimeout(() => animationSpeed = 1, hardDropAnimTime);
-                    hardDropping = true;
-                    hardDropStart = Date.now();
-                } else {
-                    merge();
-                    const lines = removeLines();
-                    if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
-                    sendState();
-                    piece = nextPiece;
-                    nextPiece = new Piece();
-                    if (piece.collide()) endGame();
-                    dropStart = Date.now();
-                    hardDropPressed = false;
-                    sendState();
-                }
-                return;
-            }
-            if (paused) return;
-            if (e.key.startsWith('Arrow') || ['w', 'a', 's', 'd'].includes(e.key.toLowerCase())) e.preventDefault();
-            if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') {
-                lastHorizontalDir = -1;
-                piece.move({x: -1, y: 0});
-            }
-            if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') {
-                lastHorizontalDir = 1;
-                piece.move({x: 1, y: 0});
-            }
-            if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') piece.rotate();
-            if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') {
-                softDropActive = true;
-                drop();
-            }
-        });
-
-        document.addEventListener('keyup', e => {
-            if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') {
-                softDropActive = false;
-            }
-            if (e.key === ' ') {
-                hardDropPressed = false;
-            }
-        });
-
-        let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
-        canvas.addEventListener('touchstart', e => {
-            if (paused || gameOver || hardDropping) return;
-            e.preventDefault();
-            touchStartX = e.changedTouches[0].screenX;
-            touchStartY = e.changedTouches[0].screenY;
-        });
-
-        canvas.addEventListener('touchmove', e => {
-            if (paused || gameOver || hardDropping) return;
-            e.preventDefault();
-            touchEndX = e.changedTouches[0].screenX;
-            touchEndY = e.changedTouches[0].screenY;
-        });
-
-        canvas.addEventListener('touchend', e => {
-            if (paused || gameOver || hardDropping) return;
-            e.preventDefault();
-            const deltaX = touchEndX - touchStartX;
-            const deltaY = touchEndY - touchStartY;
-            if (deltaY > 30) {
-                hardDropDist = 0;
-                let tempY = piece.y;
-                while (true) {
-                    piece.y++;
-                    if (piece.collide()) {
-                        piece.y = tempY;
-                        break;
-                    }
-                    hardDropDist++;
-                }
-                if (hardDropDist > 0) {
-                    animationSpeed = 2.11;
-                    hardDropAnimTime = hardDropDist * 25;
-                    setTimeout(() => animationSpeed = 1, hardDropAnimTime);
-                    hardDropping = true;
-                    hardDropStart = Date.now();
-                } else {
-                    merge();
-                    const lines = removeLines();
-                    if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
-                    sendState();
-                    piece = nextPiece;
-                    nextPiece = new Piece();
-                    if (piece.collide()) endGame();
-                    dropStart = Date.now();
-                    sendState();
-                }
-            }
-        });
-
-        const mobileLeft = document.getElementById('mobileLeft');
-        const mobileRight = document.getElementById('mobileRight');
-        const mobileDown = document.getElementById('mobileDown');
-        const mobileRotate = document.getElementById('mobileRotate');
-        const mobileHardDrop = document.getElementById('mobileHardDrop');
-
-        let moveInterval;
 
         function startMove(dir) {
             handleButtonPress(dir);
@@ -887,133 +783,166 @@
             clearInterval(moveInterval);
         }
 
-        function handleButtonPress(dir) {
-            if (paused || gameOver || hardDropping) return;
-            if (dir === 'left') {
-                lastHorizontalDir = -1;
-                piece.move({x: -1, y: 0});
-            }
-            if (dir === 'right') {
-                lastHorizontalDir = 1;
-                piece.move({x: 1, y: 0});
-            }
-            if (dir === 'down') {
-                softDropActive = true;
-                drop();
-            }
-            if (dir === 'rotate') piece.rotate();
-            if (dir === 'hardDrop') {
-                hardDropDist = 0;
-                let tempY = piece.y;
-                while (true) {
-                    piece.y++;
-                    if (piece.collide()) {
-                        piece.y = tempY;
-                        break;
-                    }
-                    hardDropDist++;
+        function handleHardDrop() {
+            if (hardDropping) return;
+            hardDropDist = 0;
+            let tempY = piece.y;
+            while (true) {
+                piece.y++;
+                if (piece.collide()) {
+                    piece.y = tempY;
+                    break;
                 }
-                if (hardDropDist > 0) {
-                    animationSpeed = 2.11;
-                    hardDropAnimTime = hardDropDist * 25;
-                    setTimeout(() => animationSpeed = 1, hardDropAnimTime);
-                    hardDropping = true;
-                    hardDropStart = Date.now();
-                } else {
-                    merge();
-                    const lines = removeLines();
-                    if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
-                    sendState();
-                    piece = nextPiece;
-                    nextPiece = new Piece();
-                    if (piece.collide()) endGame();
-                    dropStart = Date.now();
-                    sendState();
-                }
+                hardDropDist++;
+            }
+            if (hardDropDist > 0) {
+                animationSpeed = 2.11;
+                hardDropAnimTime = hardDropDist * 25;
+                setTimeout(() => animationSpeed = 1, hardDropAnimTime);
+                hardDropping = true;
+                hardDropStart = Date.now();
+                if (sfxOn) playTone(100, 200, 0.2);
+            } else {
+                merge();
+                const lines = removeLines();
+                if (isMultiplayer && lines > 1 && conn) conn.send({type: 'attack', lines: lines - 1});
+                sendState();
+                piece = nextPiece;
+                nextPiece = new Piece();
+                sendState();
+                if (piece.collide()) endGame();
+                dropStart = Date.now();
             }
         }
 
-        mobileLeft.addEventListener('touchstart', e => { e.preventDefault(); startMove('left'); });
-        mobileLeft.addEventListener('touchend', stopMove);
-
-        mobileRight.addEventListener('touchstart', e => { e.preventDefault(); startMove('right'); });
-        mobileRight.addEventListener('touchend', stopMove);
-
-        mobileDown.addEventListener('touchstart', e => { e.preventDefault(); startMove('down'); });
-        mobileDown.addEventListener('touchend', () => { stopMove(); softDropActive = false; });
-
-        mobileRotate.addEventListener('touchstart', e => { e.preventDefault(); handleButtonPress('rotate'); });
-
-        mobileHardDrop.addEventListener('touchstart', e => { e.preventDefault(); if (!hardDropPressed) { hardDropPressed = true; handleButtonPress('hardDrop'); } });
-        mobileHardDrop.addEventListener('touchend', () => { hardDropPressed = false; });
-
-        document.getElementById('startBtn').addEventListener('click', () => {
-            baseInterval = parseInt(document.getElementById('difficulty').value);
-            paused = false;
-            gameStarted = true;
-            piece = nextPiece;
-            nextPiece = new Piece();
-            document.getElementById('startBtn').style.display = 'none';
-            document.getElementById('pauseBtn').style.display = 'inline';
-            dropStart = Date.now();
-            initAudioContext().then(() => {
-                playSilent();
-                if (musicOn) playTheme();
-            });
-        });
-
-        document.getElementById('hostBtn').addEventListener('click', () => {
-            baseInterval = parseInt(document.getElementById('difficulty').value);
-            document.getElementById('hostBtn').style.display = 'none';
-            document.getElementById('joinBtn').style.display = 'none';
-            document.getElementById('gameIdInput').style.display = 'none';
-            setupMultiplayer(true);
-        });
-
-        document.getElementById('joinBtn').addEventListener('click', () => {
-            const id = document.getElementById('gameIdInput').value.toUpperCase();
-            if (id) {
-                baseInterval = parseInt(document.getElementById('difficulty').value);
-                document.getElementById('hostBtn').style.display = 'none';
-                document.getElementById('joinBtn').style.display = 'none';
-                document.getElementById('gameIdInput').style.display = 'none';
-                setupMultiplayer(false, id);
+        function handleButtonPress(dir) {
+            if (paused || gameOver || !gameStarted || !piece || hardDropping) return;
+            if (dir === 'left') {
+                lastHorizontalDir = -1;
+                piece.move({x: -1, y: 0});
+            } else if (dir === 'right') {
+                lastHorizontalDir = 1;
+                piece.move({x: 1, y: 0});
+            } else if (dir === 'down') {
+                softDropActive = true;
+                drop();
+            } else if (dir === 'rotate') {
+                piece.rotate();
+            } else if (dir === 'hardDrop') {
+                handleHardDrop();
             }
-        });
+        }
 
+        // Event listeners
+        document.getElementById('startBtn').addEventListener('click', () => restart(true));
         document.getElementById('pauseBtn').addEventListener('click', togglePause);
-
         document.getElementById('resumeBtn').addEventListener('click', togglePause);
-
         document.getElementById('restartBtn').addEventListener('click', () => {
             if (isMultiplayer && !isHost) return;
             restart(!isMultiplayer);
             if (isMultiplayer && conn) conn.send({type: 'restart'});
         });
 
-        document.getElementById('musicToggle').addEventListener('click', () => {
+        const musicBtn = document.getElementById('musicToggle');
+        musicBtn.textContent = 'Music Off';
+        musicBtn.addEventListener('click', () => {
             musicOn = !musicOn;
-            document.getElementById('musicToggle').textContent = `Music ${musicOn ? 'On' : 'Off'}`;
-            if (musicOn) {
-                clearTimeout(themeTimeout);
-                themeIndex = 0;
-                initAudioContext().then(playTheme);
-            } else {
-                clearTimeout(themeTimeout);
-                isThemePlaying = false;
+            musicBtn.textContent = musicOn ? 'Music On' : 'Music Off';
+            if (musicOn) playTheme();
+            else clearTimeout(themeTimeout);
+        });
+
+        const sfxBtn = document.getElementById('sfxToggle');
+        sfxBtn.addEventListener('click', () => {
+            sfxOn = !sfxOn;
+            sfxBtn.textContent = sfxOn ? 'SFX On' : 'SFX Off';
+        });
+
+        document.getElementById('musicVolume').addEventListener('input', e => musicVolume = parseFloat(e.target.value));
+
+        document.addEventListener('keydown', e => {
+            if (paused || gameOver || !gameStarted || !piece || hardDropping) return;
+            const key = e.key.toLowerCase();
+            if (key === 'a' || key === 'arrowleft') {
+                lastHorizontalDir = -1;
+                piece.move({x: -1, y: 0});
+            }
+            if (key === 'd' || key === 'arrowright') {
+                lastHorizontalDir = 1;
+                piece.move({x: 1, y: 0});
+            }
+            if (key === 's' || key === 'arrowdown') {
+                softDropActive = true;
+                drop();
+            }
+            if (key === 'w' || key === 'arrowup') piece.rotate();
+            if (key === ' ' && !hardDropPressed) {
+                hardDropPressed = true;
+                handleHardDrop();
             }
         });
 
-        document.getElementById('sfxToggle').addEventListener('click', () => {
-            sfxOn = !sfxOn;
-            document.getElementById('sfxToggle').textContent = `SFX ${sfxOn ? 'On' : 'Off'}`;
+        document.addEventListener('keyup', e => {
+            const key = e.key.toLowerCase();
+            if (key === 's' || key === 'arrowdown') softDropActive = false;
+            if (key === ' ') hardDropPressed = false;
         });
 
-        document.getElementById('musicVolume').addEventListener('input', e => {
-            musicVolume = parseFloat(e.target.value);
+        if (isMobile) {
+            document.getElementById('mobileLeft').addEventListener('touchstart', e => {
+                e.preventDefault();
+                startMove('left');
+            });
+            document.getElementById('mobileLeft').addEventListener('touchend', stopMove);
+            document.getElementById('mobileRight').addEventListener('touchstart', e => {
+                e.preventDefault();
+                startMove('right');
+            });
+            document.getElementById('mobileRight').addEventListener('touchend', stopMove);
+            document.getElementById('mobileDown').addEventListener('touchstart', e => {
+                e.preventDefault();
+                startMove('down');
+            });
+            document.getElementById('mobileDown').addEventListener('touchend', e => {
+                e.preventDefault();
+                stopMove();
+                softDropActive = false;
+            });
+            document.getElementById('mobileRotate').addEventListener('touchstart', e => {
+                e.preventDefault();
+                handleButtonPress('rotate');
+            });
+            document.getElementById('mobileHardDrop').addEventListener('touchstart', e => {
+                e.preventDefault();
+                if (!hardDropPressed) {
+                    hardDropPressed = true;
+                    handleButtonPress('hardDrop');
+                }
+            });
+            document.getElementById('mobileHardDrop').addEventListener('touchend', e => {
+                e.preventDefault();
+                hardDropPressed = false;
+            });
+        }
+
+        document.getElementById('hostBtn').addEventListener('click', () => {
+            setupMultiplayer(true);
         });
-	
-        updateScoreDisplay();
+
+        document.getElementById('joinBtn').addEventListener('click', () => {
+            const gameId = document.getElementById('gameIdInput').value;
+            setupMultiplayer(false, gameId);
+        });
+
+        document.getElementById('copyIdBtn').addEventListener('click', () => {
+            const gameId = document.getElementById('gameId').textContent;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(gameId).then(() => alert('Game ID copied!'));
+            } else {
+                alert('Copy manually: ' + gameId);
+            }
+        });
+
         gameLoop();
     </script>
 </body>
