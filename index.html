@@ -158,9 +158,9 @@
         let missedPings = 0;
 
         const peerConfig = {
-            host: 'peerjs.com',
+            host: '0.peerjs.com',
             port: 443,
-            path: '/',
+            path: '/peerjs',
             secure: true,
             debug: 3,
             config: {
@@ -170,9 +170,9 @@
                     { urls: 'stun:stun2.l.google.com:19302' },
                     { urls: 'stun:stun3.l.google.com:19302' },
                     { urls: 'stun:stun4.l.google.com:19302' },
-                    { urls: 'turn:staticauth.openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayprojectsecret' },
-                    { urls: 'turn:staticauth.openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayprojectsecret' },
-                    { urls: 'turns:staticauth.openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayprojectsecret' },
+                    { urls: 'turn:staticauth.openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                    { urls: 'turn:staticauth.openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                    { urls: 'turns:staticauth.openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
                     { urls: 'turn:turn.anyfirewall.com:443?transport=tcp', username: 'webrtc', credential: 'webrtc' },
                     { urls: 'turn:relay1.expressturn.com:3478', username: 'efI4V8R4T7MDY7L9', credential: '2x6n9j5d' },
                     { urls: 'turns:relay1.expressturn.com:5349', username: 'efI4V8R4T7MDY7L9', credential: '2x6n9j5d' }
@@ -753,19 +753,9 @@
                 opponentWrapper.style.display = 'flex';
                 opponentWrapper.style.flexDirection = 'column';
                 opponentWrapper.style.alignItems = 'center';
-                const scoresDiv = document.createElement('div');
-                scoresDiv.id = 'scoresDiv';
-                scoresDiv.appendChild(document.getElementById('score'));
-                scoresDiv.appendChild(document.getElementById('opponentScore'));
-                const rightSide = document.getElementById('rightSide');
-                const preview = document.getElementById('previewCanvas');
-                rightSide.insertBefore(scoresDiv, preview);
-                rightSide.style.display = 'flex';
-                rightSide.style.flexDirection = 'row';
-                rightSide.style.alignItems = 'center';
-                scoresDiv.style.display = 'flex';
-                scoresDiv.style.flexDirection = 'column';
-                scoresDiv.style.marginRight = '10px';
+                opponentWrapper.appendChild(opponentCanvas);
+                opponentWrapper.appendChild(document.getElementById('p2Label'));
+                boards.insertBefore(opponentWrapper, canvas);
             }
             sendState();
             let pingInterval = setInterval(() => {
@@ -804,7 +794,7 @@
                 hardDropDist++;
             }
             if (hardDropDist > 0) {
-                animationSpeed = 2.1;
+                animationSpeed = 2.11;
                 hardDropAnimTime = hardDropDist * 25;
                 setTimeout(() => animationSpeed = 1, hardDropAnimTime);
                 hardDropping = true;
