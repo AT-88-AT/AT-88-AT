@@ -160,6 +160,7 @@
             host: '0.peerjs.com',
             port: 443,
             secure: true,
+            debug: 3,
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
@@ -168,7 +169,13 @@
                     { urls: 'stun:stun3.l.google.com:19302' },
                     { urls: 'stun:stun4.l.google.com:19302' },
                     { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-                    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+                    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+                    { urls: 'turns:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                    { urls: 'turns:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+                    { urls: 'turn:turn.anyfirewall.com:443?transport=tcp', username: 'webrtc', credential: 'webrtc' },
+                    { urls: 'turn:relay.backups.cz', username: 'webrtc', credential: 'webrtc' },
+                    { urls: 'turn:relay.metered.ca:80', username: 'your-username-here', credential: 'your-credential-here' }
                 ]
             }
         };
@@ -640,6 +647,22 @@
             }
         }
 
+        function retryConnection(callback, maxRetries = 3, delay = 2000) {
+            let attempts = 0;
+            function attempt() {
+                attempts++;
+                callback();
+                if (attempts >= maxRetries) return;
+            }
+            peer.on('error', err => {
+                if (err.type === 'peer-unavailable' || err.type === 'network') {
+                    console.warn(`Connection failed, retrying (${attempts}/${maxRetries})...`);
+                    setTimeout(attempt, delay);
+                }
+            });
+            attempt();
+        }
+
         function setupMultiplayer(host, joinId = null) {
             isHost = host;
             if (host) {
@@ -662,7 +685,7 @@
                 peer = new Peer(peerConfig);
                 peer.on('open', id => {
                     console.log('Joiner peer open');
-                    if (joinId) joinMultiplayer(joinId);
+                    if (joinId) retryConnection(() => joinMultiplayer(joinId));
                 });
                 peer.on('error', err => {
                     console.error('PeerJS error:', err);
